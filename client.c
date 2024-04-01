@@ -27,7 +27,7 @@ int connect_to_server(int port, char* addr){
     //*** connect to server ***
     int r = connect(sockfd, (struct sockaddr *) &server_address, sizeof(server_address));
     if(r == -1){
-        perror("connection failed");
+        perror("connect_to_server");
         close(sockfd);
         return -1;
     }
@@ -35,9 +35,18 @@ int connect_to_server(int port, char* addr){
     return sockfd;
 }
 
+void print_header(MessageHeader* header){
+    printf("MessageHeader: CODEREQ(%d) ID(%d) EQ(%d)\n",
+        GET_CODEREQ(header), GET_ID(header), GET_EQ(header));
+}
+
 int start_match(int sockfd, uint16_t mode) {
     MessageHeader header;
+    memset(&header, 0, sizeof(header));
     SET_CODEREQ(&header, mode);
+
+    printf("\nStarting match with server. Sending header:\n");
+    print_header(&header);
 
     if(send(sockfd, &header, sizeof(header), 0) == -1){
         perror("start_match, send");
@@ -60,7 +69,7 @@ int main(int argc, char** args){
     char* addr = args[2];
 
     if((sockfd = connect_to_server(port, addr)) < 0){
-        perror("connection");
+        printf("Connecting to server failed. Exiting...");
         return 1;
     }
 

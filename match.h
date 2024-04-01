@@ -13,19 +13,19 @@ typedef struct MessageHeader {
     (header)->header_line = ((header)->header_line & 0xE000) | codereq
 
 #define GET_CODEREQ(header) \
-    header->header_line & 0x1FFF
+    (header)->header_line & 0x1FFF
 
 #define SET_ID(header, id) \
-    header->header_line = (header->header_line & 0x9FFF) | (id << 13)
+    (header)->header_line = ((header)->header_line & 0x9FFF) | (id << 13)
 
 #define GET_ID(header) \
-    (header->header_line & 0x6000) >> 13
+    ((header)->header_line & 0x6000) >> 13
 
 #define SET_EQ(header, eq) \
-    header->header_line = (header->header_line & 0x7FFF) | (eq << 15)
+    (header)->header_line = ((header)->header_line & 0x7FFF) | (eq << 15)
 
 #define GET_EQ(header) \
-    (header->header_line & 0x8000) >> 15
+    ((header)->header_line & 0x8000) >> 15
 
 /*
   0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
@@ -42,16 +42,16 @@ typedef struct ActionMessage {
 } ActionMessage;
 
 #define SET_NUM(message, num) \
-    message->action_identifier = (message->action_identifier & 0xE000) | num
+    (message)->action_identifier = ((message)->action_identifier & 0xE000) | num
 
 #define GET_NUM(message) \
-    message->action_identifier & 0x1FFF
+    (message)->action_identifier & 0x1FFF
 
 #define SET_ACTION(message, action) \
-    message->action_identifier = (message->action_identifier & 0x1FFF) | (action << 13)
+    (message)->action_identifier = ((message)->action_identifier & 0x1FFF) | (action << 13)
 
 #define GET_ACTION(message) \
-    (message->action_identifier & 0xE000) >> 13
+    ((message)->action_identifier & 0xE000) >> 13
 
 /*
   0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
