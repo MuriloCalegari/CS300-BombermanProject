@@ -10,7 +10,7 @@ typedef struct MessageHeader {
 } MessageHeader;
 
 #define SET_CODEREQ(header, codereq) \
-    header->header_line = (header->header_line & 0xE000) | codereq
+    (header)->header_line = ((header)->header_line & 0xE000) | codereq
 
 #define GET_CODEREQ(header) \
     header->header_line & 0x1FFF
@@ -149,3 +149,28 @@ typedef struct MatchUpdateHeader {
     uint16_t num;
     uint8_t count;
 } MatchUpdateHeader;
+
+/* CODEREQ definitions */
+#define NEW_MATCH_4_OPPONENTS 1
+#define NEW_MATCH_2_TEAMS 2
+
+#define CLIENT_READY_TO_PLAY_4_OPPONENTS 3
+#define CLIENT_READY_TO_PLAY_2_TEAMS 4
+
+#define ACTION_MESSAGE_4_OPPONENTS 5
+#define ACTION_MESSAGE_2_TEAMS 6
+
+#define T_CHAT_ALL_PLAYERS 7
+#define T_CHAT_TEAM 8
+
+#define SERVER_RESPONSE_MATCH_START_4_OPPONENTS 9
+#define SERVER_RESPONSE_MATCH_START_2_TEAMS 10
+
+#define SERVER_FULL_MATCH_STATUS 11
+#define SERVER_PARTIAL_MATCH_UPDATE 12
+
+#define SERVER_TCHAT_SENT_ALL_PLAYERS 13
+#define SERVER_TCHAT_SENT_TEAM 14
+
+#define SERVER_RESPONSE_MATCH_END_4_OPPONENTS 15
+#define SERVER_RESPONSE_MATCH_END_2_TEAMS 16

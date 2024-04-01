@@ -35,16 +35,29 @@ int connect_to_server(int port, char* addr){
     return sockfd;
 }
 
+int start_match(int sockfd, uint16_t mode) {
+    MessageHeader header;
+    SET_CODEREQ(&header, mode);
+
+    if(send(sockfd, &header, sizeof(header), 0) == -1){
+        perror("start_match, send");
+        return -1;
+    }
+
+    return 0;
+}
+
 
 int main(int argc, char** args){
     int sockfd;
-    int port = atoi(args[1]);
-    char* addr = args[2];
 
     if(argc != 3){
         printf("usage: %s <port> <address>\n", args[0]);
         return 1;
     }
+
+    int port = atoi(args[1]);
+    char* addr = args[2];
 
     if((sockfd = connect_to_server(port, addr)) < 0){
         perror("connection");
@@ -53,14 +66,10 @@ int main(int argc, char** args){
 
     printf("connection successful\n");
 
-    //*** send a message ***
-    // uint16_t header;
-    // generate_header(codereq, id, eq, &header);
-    // int written = send(sockfd, &header, sizeof(uint16_t), 0);
-    // if(written <= 0){
-    //     perror("write error");
-    //     exit(3);
-    // }
+    if(start_match(sockfd, 1) < 0){
+        printf("start_match failed\n");
+        return 1;
+    }
 
     return 0;
 }
