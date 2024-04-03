@@ -135,8 +135,13 @@ typedef struct MatchStatusHeader {
 
 #define PLAYER_OFFSET 5
 
-#define ENCODE_PLAYER(player) \
-    PLAYER_OFFSET + player
+// #define ENCODE_PLAYER(player) \
+//     PLAYER_OFFSET + player
+
+#define PLAYER_ID 1
+
+#define ENCODE_PLAYER() \
+    (PLAYER_ID % 5)
 
 typedef struct CellStatusUpdate {
     uint8_t row;

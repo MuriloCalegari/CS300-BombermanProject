@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "match.h"
 
 void affiche_connexion(struct sockaddr_in6 adrclient){
   char adr_buf[INET6_ADDRSTRLEN];
@@ -13,6 +14,41 @@ void affiche_connexion(struct sockaddr_in6 adrclient){
   inet_ntop(AF_INET6, &(adrclient.sin6_addr), adr_buf, sizeof(adr_buf));
   printf("adresse client : IP: %s port: %d\n", adr_buf, ntohs(adrclient.sin6_port));
 }
+
+
+int comunication(int sockclient){
+  if(sockclient >= 0){
+
+    NewMatchMessage resp;
+    
+    //reception d'un message
+    ActionMessage *buf;
+    int r = recv(sockclient, &buf, sizeof(buf), 0);
+    switch(GET_CODEREQ(&buf->message_header)){
+      case 1:
+        SET_CODEREQ(&resp.header, 9);
+        SET_ID(&resp.header, ENCODE_PLAYER());
+        SET_EQ(&resp.header, 0);
+        // TODO UDP , MDIFF ADRMDIDD
+        break;
+      case 2:
+        SET_CODEREQ(&resp.header, 10);
+        SET_ID(&resp.header, ENCODE_PLAYER());
+        SET_EQ(&resp.header, 0);
+        break;
+    }
+
+    //envoie du message
+    int s = send(sockclient, &resp, sizeof(resp), 0);
+    if(s <= 0){
+      perror("send");
+      return 2;
+    }
+
+  }
+  return 0;
+}
+
 
 int main(int argc, char** args) {
   if (argc < 2) {
@@ -59,6 +95,12 @@ int main(int argc, char** args) {
   }	   
 
   affiche_connexion(adrclient);
+
+  while(1){
+    comunication(sockclient);
+  }
+
+
   //*** fermeture socket client ***
   close(sockclient);
 
