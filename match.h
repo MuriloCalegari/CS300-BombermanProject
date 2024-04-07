@@ -9,6 +9,10 @@ typedef struct MessageHeader {
     uint16_t header_line;
 } MessageHeader;
 
+typedef struct JoinMatchRequest {
+    MessageHeader header;
+} JoinMatchRequest;
+
 #define SET_CODEREQ(header, codereq) \
     (header)->header_line = ((header)->header_line & 0xE000) | codereq
 
@@ -135,13 +139,13 @@ typedef struct MatchStatusHeader {
 
 #define PLAYER_OFFSET 5
 
-// #define ENCODE_PLAYER(player) \
-//     PLAYER_OFFSET + player
+#define ENCODE_PLAYER(player) \
+    PLAYER_OFFSET + player
 
-#define PLAYER_ID 1
+// #define PLAYER_ID 1
 
-#define ENCODE_PLAYER() \
-    (PLAYER_ID % 5)
+// #define ENCODE_PLAYER() \
+//     (PLAYER_ID % 5)
 
 typedef struct CellStatusUpdate {
     uint8_t row;
