@@ -37,5 +37,7 @@ typedef struct Match {
 
 typedef struct PlayerHandlerThreadContext {
     int player_socket;
+    int id;
+    int equipe;
     Match *match;
 } PlayerHandlerThreadContext;

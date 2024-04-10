@@ -69,6 +69,7 @@ typedef struct ActionMessage {
 typedef struct TChatHeader {
     MessageHeader header;
     uint8_t data_len;
+    char* data;
 } TChatHeader;
 
 
