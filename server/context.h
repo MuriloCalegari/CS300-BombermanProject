@@ -13,6 +13,11 @@ socket information, current game status, etc.
 
 #define MAX_PLAYERS_PER_MATCH 4
 
+typedef struct ActionBuf {
+    int num;
+    int action;
+} ActionBuf;
+
 typedef struct Match {
     uint8_t mode; // FOUR_OPPONENTS or TEAM_MODE
     uint8_t players_count; // How many players are currently on this match
@@ -31,6 +36,9 @@ typedef struct Match {
     uint8_t height;
     uint8_t width;
     uint8_t *grid;
+
+    /* Buffer storing the last action that we have received from the players so far */
+    ActionBuf last_actions[MAX_PLAYERS_PER_MATCH];
 
     pthread_mutex_t mutex;
 } Match;

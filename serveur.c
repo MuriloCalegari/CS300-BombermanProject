@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <assert.h>
+#include <poll.h>
 #include "server/network.h"
 #include "server/match.h"
 #include "common/util.h"
@@ -82,8 +83,8 @@ void start_match(Match* match) {
   MatchHandlerThreadContext *context = malloc(sizeof(MatchHandlerThreadContext));
   context->match = match;
 
-  pthread_t pthread; // TODO Consider storing somewhere
   launch_thread(match_handler, context);
+  // TODO launch another thread for the timed updates
 }
 
 /* Used by the main thread to decide if it should setup a new match with no players */
@@ -105,141 +106,6 @@ int can_start_match(Match *match) {
   }
 
   return 1;
-}
-
-int get_player_initial_position(int id) {
-  switch(id) {
-    case 0:
-      return 0; // Top left corner
-    case 1:
-      return WIDTH - 1; // Top right corner
-    case 2:
-      return HEIGHT * WIDTH - 1; // Bottom right corner
-    case 3:
-      return HEIGHT * WIDTH - WIDTH; // Bottom left corner
-    default:
-      printf("Invalid player id: %d\n", id);
-      exit(-1);
-  }
-}
-
-int get_player_team(int initial_position) {
-  if(initial_position == 0 || initial_position == HEIGHT * WIDTH - 1) {
-    return 0;
-  } else {
-    return 1;
-  }
-}
-
-void fill_address(struct sockaddr_storage *dst, int current_udp_port) {
-  struct sockaddr_in6 addr_ipv6;
-  memset(&addr_ipv6, 0, sizeof(addr_ipv6));
-  addr_ipv6.sin6_family = AF_INET6;
-  addr_ipv6.sin6_port = htons(current_udp_port);
-
-  int s = inet_pton(AF_INET6, MULTICAST_ADDRESS, &addr_ipv6.sin6_addr);
-
-  if(s <= 0){
-    perror("inet_pton");
-    exit(1);
-  }
-
-  // Copy the address to the sockaddr_storage
-  memcpy(dst, &addr_ipv6, sizeof(addr_ipv6));
-}
-
-Match *create_new_match_4_opponents(int client_socket) {
-  Match *new_match = malloc(sizeof(Match));
-  memset(new_match, 0, sizeof(Match));
-
-  int player_id = 0;
-
-  new_match->mode = FOUR_OPPONENTS_MODE;
-  new_match->players_count = 1;
-  new_match->players[player_id] = 0;
-  new_match->sockets_tcp[player_id] = client_socket;
-
-  new_match->multicast_port = current_udp_port;
-  current_udp_port++;
-
-  fill_address(&new_match->multicast_addr, current_udp_port);
-
-  new_match->height = HEIGHT;
-  new_match->width = WIDTH;
-  new_match->grid = malloc(HEIGHT * WIDTH * sizeof(uint8_t));
-
-  // Put the player on the grid
-  new_match->grid[get_player_initial_position(player_id)] = ENCODE_PLAYER(player_id);
-
-  pthread_mutex_init(&new_match->mutex, 0);
-  return new_match;
-}
-
-int add_player_to_match_4_opponents(Match *match, int client_socket) {
-  pthread_mutex_lock(&match->mutex);
-
-  int current_player_id = match->players_count;
-
-  // Update current match status
-  match->players_count++;
-  match->players[current_player_id] = current_player_id;
-  match->sockets_tcp[current_player_id] = client_socket;
-
-  // Put the player on the grid
-  match->grid[get_player_initial_position(current_player_id)] = ENCODE_PLAYER(current_player_id);
-
-  pthread_mutex_unlock(&match->mutex);
-
-  return current_player_id;
-}
-
-Match *create_new_match_2_teams(int client_socket) {
-  Match *new_match = malloc(sizeof(Match));
-  memset(new_match, 0, sizeof(Match));
-
-  int player_id = 0;
-
-  new_match->mode = FOUR_OPPONENTS_MODE;
-  new_match->players_count = 1;
-  new_match->players[player_id] = 0;
-  new_match->sockets_tcp[player_id] = client_socket;
-
-  new_match->multicast_port = current_udp_port;
-  current_udp_port++;
-
-  fill_address(&new_match->multicast_addr, current_udp_port);
-
-  new_match->height = HEIGHT;
-  new_match->width = WIDTH;
-  new_match->grid = malloc(HEIGHT * WIDTH * sizeof(uint8_t));
-
-  // Put the player on the grid
-  int initial_position = get_player_initial_position(player_id);
-  new_match->grid[initial_position] = ENCODE_PLAYER(player_id);
-  new_match->players_team[player_id] = get_player_team(initial_position);
-
-  pthread_mutex_init(&new_match->mutex, 0);
-  return new_match;
-}
-
-int add_player_to_match_2_teams(Match *match, int client_socket) {
-  pthread_mutex_lock(&match->mutex);
-
-  int current_player_id = match->players_count;
-
-  // Update current match status
-  match->players_count++;
-  match->players[current_player_id] = current_player_id;
-  match->sockets_tcp[current_player_id] = client_socket;
-
-  // Put the player on the grid
-  int initial_position = get_player_initial_position(current_player_id);
-  match->grid[initial_position] = ENCODE_PLAYER(current_player_id);
-  match->players_team[current_player_id] = get_player_team(initial_position);
-
-  pthread_mutex_unlock(&match->mutex);
-
-  return current_player_id;
 }
 
 void handle_client_ready_to_play(MessageHeader message_header, Match *match) {
@@ -292,7 +158,7 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
       int current_player_index;
       if(*current_4_opponents == NULL) {
         printf(" There are no current pending matches, so we'll start one\n");
-        Match *new_match = create_new_match_4_opponents(client_socket);
+        Match *new_match = create_new_match_4_opponents(client_socket, current_udp_port, HEIGHT, WIDTH, MULTICAST_ADDRESS);
         current_player_index = new_match->players[0];
         *current_4_opponents = new_match;
         launch_tcp_player_handler(new_match, current_player_index);
@@ -306,7 +172,7 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
       printf("Player wants to join a match with 2 teams.");
       if(*current_2_teams == NULL) {
         printf(" There are no current pending matches, so we'll start one\n");
-        Match *new_match = create_new_match_2_teams(client_socket);
+        Match *new_match = create_new_match_2_teams(client_socket, current_udp_port, HEIGHT, WIDTH, MULTICAST_ADDRESS);
         current_player_index = new_match->players[0];
         *current_2_teams = new_match;
         launch_tcp_player_handler(new_match, current_player_index);
@@ -354,5 +220,17 @@ void *match_handler(void *arg) {
   Match *match = context->match;
 
   while(1) {
+    ActionMessage action_message;
+    
+    // TODO this port is not listening yet
+    read_loop(match->multicast_port, &action_message, sizeof(ActionMessage), 0);
+
+    if((GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_4_OPPONENTS
+        || (GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_2_TEAMS) {
+          printf("Received invalid CODEREQ %d on UDP port. Ignoring...\n", GET_CODEREQ(&action_message.message_header));
+          continue;
+    };
+
+    handle_action_message(match, GET_NUM(&action_message), GET_ACTION(&action_message));
   }
 }
