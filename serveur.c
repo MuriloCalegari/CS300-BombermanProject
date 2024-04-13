@@ -6,8 +6,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
-#include "match.h"
-#include "context.h"
+#include <assert.h>
+#include "server/network.h"
+#include "server/match.h"
+#include "common/util.h"
 
 #define HEIGHT 16
 #define WIDTH 16
@@ -18,15 +20,12 @@ int current_udp_port = 1024; // Used for multicast groups
 int server_udp_port;
 int server_tcp_port;
 
-int wait_for_next_player(int socket);
-void affiche_connexion(struct sockaddr_in6 adrclient);
-int prepare_socket_and_listen(int port);
-int read_loop(int fd, void * dst, int n, int flags);
-int write_loop(int fd, void * dst, int n, int flags);
 void handle_first_tcp_message(int client_socket, MessageHeader message_header, Match **current_4_opponents, Match **current_2_teams);
-int should_start_new_match(Match *match);
+int should_setup_new_match(Match *match);
+int can_start_match(Match *match);
 void start_match(Match* match);
 void *tcp_player_handler(void *arg);
+void *match_handler(void *arg);
 
 /*
   The main thread is responsible for taking in new gamers in and setting up their matches,
@@ -57,18 +56,13 @@ int main(int argc, char** args) {
     read_loop(client_socket, &message_header, sizeof(MessageHeader), 0);
     handle_first_tcp_message(client_socket, message_header, &current_match_4_opponents, &current_match_2_teams);
 
-    if(should_start_new_match(current_match_4_opponents)) {
-      start_match(current_match_4_opponents);
-      // TODO consider storing this pointer somewhere before we lose its reference here.
+    if(should_setup_new_match(current_match_4_opponents)) {
       current_match_4_opponents = NULL;
     }
 
-    if(should_start_new_match(current_match_2_teams)) {
-      start_match(current_match_4_opponents);
+    if(should_setup_new_match(current_match_2_teams)) {
       current_match_2_teams = NULL;
     }
-
-    // TODO handle starting a new match on a separate thread if we have enough players
   }
 
   //*** fermeture socket client ***
@@ -81,11 +75,30 @@ int main(int argc, char** args) {
 }
 
 void start_match(Match* match) {
-  // TODO implement
+  printf("Starting match with %d players\n", match->players_count);
+
+  initialize_grid(match);
+
+  MatchHandlerThreadContext *context = malloc(sizeof(MatchHandlerThreadContext));
+  context->match = match;
+
+  pthread_t pthread; // TODO Consider storing somewhere
+  launch_thread(match_handler, context);
 }
 
-int should_start_new_match(Match *match) {
-  if(match == NULL || match->players_count != PLAYERS_PER_MATCH) return 0;
+/* Used by the main thread to decide if it should setup a new match with no players */
+int should_setup_new_match(Match *match) {
+  if(match == NULL || match->players_count == PLAYERS_PER_MATCH) {
+    return 1;
+  }
+
+  return 0;
+}
+
+int can_start_match(Match *match) {
+  assert(match != NULL);
+
+  if(match->players_count != PLAYERS_PER_MATCH) return 0;
 
   for(int i = 0; i < PLAYERS_PER_MATCH; i++) {
     if(!match->players_ready_status[i]) return 0;
@@ -230,12 +243,14 @@ int add_player_to_match_2_teams(Match *match, int client_socket) {
 }
 
 void handle_client_ready_to_play(MessageHeader message_header, Match *match) {
+  pthread_mutex_lock(&match->mutex);
   /* Find the respective player based on its socket number */
   for(int i = 0; i < match->players_count; i++) {
     if(match->players[i] == GET_ID(&message_header)) {
       match->players_ready_status[i] = 1;
     }
   }
+  pthread_mutex_lock(&match->mutex);
 }
 
 void send_new_match_info_message(Match *match, int player_index, int mode) {
@@ -263,13 +278,11 @@ void send_new_match_info_message(Match *match, int player_index, int mode) {
 }
 
 void launch_tcp_player_handler(Match *match, int player_index) {
-  pthread_t thread;
   PlayerHandlerThreadContext *context = malloc(sizeof(PlayerHandlerThreadContext));
   context->player_index = player_index;
   context->match = match;
 
-  pthread_create(&thread, NULL, tcp_player_handler, context);
-  // TODO: Consider storing thread reference somewhere.
+  launch_thread(tcp_player_handler, context);
 }
 
 void handle_first_tcp_message(int client_socket, MessageHeader message_header, Match **current_4_opponents, Match **current_2_teams) {
@@ -323,6 +336,12 @@ void *tcp_player_handler(void *arg) {
       case CLIENT_READY_TO_PLAY_2_TEAMS:
         printf("Player %d is ready to play\n", GET_ID(&message_header));
         handle_client_ready_to_play(message_header, match);
+
+        pthread_mutex_lock(&match->mutex);
+        if(can_start_match(match)) {
+          start_match(match);
+          pthread_mutex_unlock(&match->mutex);
+        }
         break;
     }
   }
@@ -330,79 +349,10 @@ void *tcp_player_handler(void *arg) {
   return NULL;
 }
 
-int prepare_socket_and_listen(int port) {
-  //*** creation de la socket serveur ***
-  int sock = socket(PF_INET6, SOCK_STREAM, 0);
-  if(sock < 0){
-    perror("creation socket");
-    exit(1);
+void *match_handler(void *arg) {
+  MatchHandlerThreadContext *context = (MatchHandlerThreadContext *) arg;
+  Match *match = context->match;
+
+  while(1) {
   }
-
-  //*** creation de l'adresse du destinataire (serveur) ***
-  struct sockaddr_in6 address_sock;
-  memset(&address_sock, 0, sizeof(address_sock));
-  address_sock.sin6_family = AF_INET6;
-  address_sock.sin6_port = htons(port);
-  address_sock.sin6_addr = in6addr_any;
-  
-  //*** on lie la socket au port PORT ***
-  int r = bind(sock, (struct sockaddr *) &address_sock, sizeof(address_sock));
-  if (r < 0) {
-    perror("erreur bind");
-    exit(2);
-  }
-
-  //*** Le serveur est pret a ecouter les connexions sur le port PORT ***
-  r = listen(sock, 0);
-  if (r < 0) {
-    perror("erreur listen");
-    exit(2);
-  }
-
-  return sock;
-}
-
-// Read and write in a loop
-int read_loop(int fd, void * dst, int n, int flags) {
-  int received = 0;
-
-  while(received != n) {
-    received += recv(fd, dst + received, n - received, flags);
-  }
-
-  return received;
-}
-
-int write_loop(int fd, void * src, int n, int flags) {
-  int sent = 0;
-
-  while(sent != n) {
-    sent += send(fd, src + sent, n - sent, flags);
-  }
-
-  return sent;
-}
-
-int wait_for_next_player(int socket) {
-    //*** le serveur accepte une connexion et cree la socket de communication avec le client ***
-    struct sockaddr_in6 client_address;
-    memset(&client_address, 0, sizeof(client_address));
-    socklen_t size=sizeof(client_address);
-    int client_socket = accept(socket, (struct sockaddr *) &client_address, &size);
-    if(client_socket == -1){
-      perror("probleme socket client");
-      exit(1);
-    }	   
-
-    affiche_connexion(client_address);
-
-    return client_socket;
-}
-
-void affiche_connexion(struct sockaddr_in6 adrclient){
-  char adr_buf[INET6_ADDRSTRLEN];
-  memset(adr_buf, 0, sizeof(adr_buf));
-  
-  inet_ntop(AF_INET6, &(adrclient.sin6_addr), adr_buf, sizeof(adr_buf));
-  printf("Client connected with : IP: %s port: %d\n", adr_buf, ntohs(adrclient.sin6_port));
 }

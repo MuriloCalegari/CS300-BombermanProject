@@ -39,3 +39,7 @@ typedef struct PlayerHandlerThreadContext {
     int player_index;
     Match *match;
 } PlayerHandlerThreadContext;
+
+typedef struct MatchHandlerThreadContext {
+    Match *match;
+} MatchHandlerThreadContext;

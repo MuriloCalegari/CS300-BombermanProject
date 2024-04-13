@@ -11,6 +11,8 @@
         "cstdint": "cpp",
         "compare": "cpp",
         "socket.h": "c",
-        "in.h": "c"
+        "in.h": "c",
+        "network.h": "c",
+        "context.h": "c"
     }
 }
