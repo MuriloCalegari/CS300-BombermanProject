@@ -148,6 +148,26 @@ void initialize_grid(Match* match) {
     memset(match->grid, EMPTY_CELL, grid_size * sizeof(*match->grid));
 
     // TODO place destructible and undestructible walls on the grid
+    for(int i = 1; i < match->height - 1; i++){
+      if(i % 2 == 0)continue;
+      for(int j = 1; j  < match->width - 1; j++){
+        if(j % 2 == 1){
+          match->grid[i * match->width + j] = INDESTRUCTIBLE_WALL;
+        }
+      }
+    }
+    srand(time(NULL));
+    int a_place = grid_size/3;
+    int nb = 0;
+    while(nb < a_place){
+      int i = rand() % (match->height - 2) + 1; 
+      int j = rand() % (match->width - 2) + 1;
+      if(match->grid[i * match->width + j] == EMPTY_CELL){
+        match->grid[i * match->width + j] = DESTRUCTIBLE_WALL;
+        nb++;
+      }
+    }
+    
 };
 
 void handle_action_message(Match *match, int num, int action) {
