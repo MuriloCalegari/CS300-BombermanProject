@@ -2,5 +2,17 @@
     "cSpell.words": [
         "codereq",
         "fdsock"
-    ]
+    ],
+    "files.associations": {
+        "match.h": "c",
+        "unistd.h": "c",
+        "types.h": "c",
+        "stdlib.h": "c",
+        "cstdint": "cpp",
+        "compare": "cpp",
+        "socket.h": "c",
+        "in.h": "c",
+        "network.h": "c",
+        "context.h": "c"
+    }
 }

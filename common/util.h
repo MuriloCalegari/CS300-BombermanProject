@@ -1,0 +1,1 @@
+int launch_thread(void *(*start_routine)(void *), void *arg);
