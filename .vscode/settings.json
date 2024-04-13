@@ -9,6 +9,8 @@
         "types.h": "c",
         "stdlib.h": "c",
         "cstdint": "cpp",
-        "compare": "cpp"
+        "compare": "cpp",
+        "socket.h": "c",
+        "in.h": "c"
     }
 }

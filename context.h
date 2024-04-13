@@ -23,8 +23,8 @@ typedef struct Match {
     int sockets_tcp[MAX_PLAYERS_PER_MATCH]; // Players' sockets in TCP mode
     uint8_t players_ready_status[MAX_PLAYERS_PER_MATCH];
 
-    sockaddr_storage multicast_addr;
-    uint8_t multicast_port;
+    struct sockaddr_storage multicast_addr;
+    uint8_t multicast_port; // in host endianness
 
     /* Grid information, where grid is an array such that
         grid[i * width + j] corresponds to the state of the (i, j) cell */
@@ -36,6 +36,6 @@ typedef struct Match {
 } Match;
 
 typedef struct PlayerHandlerThreadContext {
-    int player_socket;
+    int player_index;
     Match *match;
 } PlayerHandlerThreadContext;

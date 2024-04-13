@@ -9,10 +9,6 @@ typedef struct MessageHeader {
     uint16_t header_line;
 } MessageHeader;
 
-typedef struct JoinMatchRequest {
-    MessageHeader header;
-} JoinMatchRequest;
-
 #define SET_CODEREQ(header, codereq) \
     (header)->header_line = ((header)->header_line & 0xE000) | codereq
 
