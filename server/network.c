@@ -79,3 +79,35 @@ int write_loop(int fd, void * src, int n, int flags) {
 
   return sent;
 }
+
+int write_loop_udp(int fd, void * src, int n, struct sockaddr_in6 * dest_addr, socklen_t dest_addr_len) {
+  int sent = 0;
+
+  while(sent != n) {
+    sent += sendto(fd, src + sent, n - sent, 0, (struct sockaddr *) dest_addr, dest_addr_len);
+  }
+
+  return sent;
+}
+
+int setup_udp_listening_socket(int udp_port) {
+  printf("Binding UDP socket to port %d\n", udp_port);
+  int sock = socket(AF_INET6, SOCK_DGRAM, 0);
+  if(sock < 0) {
+    perror("socket");
+    exit(-1);
+  }
+
+  struct sockaddr_in6 addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin6_family = AF_INET6;
+  addr.sin6_addr = in6addr_any;
+  addr.sin6_port = htons(udp_port);
+
+  if(bind(sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+    perror("bind");
+    exit(-1);
+  }
+  
+  return sock;
+}

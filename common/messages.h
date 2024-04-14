@@ -41,6 +41,21 @@ typedef struct ActionMessage {
     uint16_t action_identifier;
 } ActionMessage;
 
+#define NUM_MAX 8191
+
+// We use this constant such that a message with num [0, OVERFLOW_DETECTION_BUFFER]
+// is considered greater than a message with num [NUM_MAX - OVERFLOW_DETECTION_BUFFER, NUM_MAX]
+#define OVERFLOW_DETECTION_BUFFER 16
+
+/* Possible actions */
+
+#define MOVE_NORTH 0
+#define MOVE_EAST 1
+#define MOVE_SOUTH 2
+#define MOVE_WEST 3
+#define DROP_BOMB 4
+#define CANCEL_LATEST_MOVE 5
+
 #define SET_NUM(message, num) \
     (message)->action_identifier = ((message)->action_identifier & 0xE000) | num
 
@@ -120,12 +135,12 @@ typedef struct NewMatchMessage {
     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 */
 
-typedef struct MatchStatusHeader {
+typedef struct MatchFullUpdateHeader {
     MessageHeader header;
     uint16_t num;
     uint8_t height;
     uint8_t width;
-} MatchStatusHeader;
+} MatchFullUpdateHeader;
     
 #define EMPTY_CELL 0
 #define INDESTRUCTIBLE_WALL 1
@@ -138,10 +153,8 @@ typedef struct MatchStatusHeader {
 #define ENCODE_PLAYER(player) \
     PLAYER_OFFSET + player
 
-// #define PLAYER_ID 1
-
-// #define ENCODE_PLAYER() \
-//     (PLAYER_ID % 5)
+#define DECODE_PLAYER(cell) \
+    cell - PLAYER_OFFSET
 
 typedef struct CellStatusUpdate {
     uint8_t row;

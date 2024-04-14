@@ -8,18 +8,20 @@
 #include <pthread.h>
 #include <assert.h>
 #include <poll.h>
+#include <time.h>
 #include "server/network.h"
 #include "server/match.h"
 #include "common/util.h"
 
+#define LONG_FREQ_MS 1000
 #define HEIGHT 16
 #define WIDTH 16
 #define PLAYERS_PER_MATCH 4
 #define MULTICAST_ADDRESS "ff12::1"
 
 int current_udp_port = 1024; // Used for multicast groups
-int server_udp_port;
 int server_tcp_port;
+int freq;
 
 void handle_first_tcp_message(int client_socket, MessageHeader message_header, Match **current_4_opponents, Match **current_2_teams);
 int should_setup_new_match(Match *match);
@@ -27,6 +29,7 @@ int can_start_match(Match *match);
 void start_match(Match* match);
 void *tcp_player_handler(void *arg);
 void *match_handler(void *arg);
+void *match_updater_thread_handler(void *arg);
 
 /*
   The main thread is responsible for taking in new gamers in and setting up their matches,
@@ -35,12 +38,21 @@ void *match_handler(void *arg);
 
 int main(int argc, char** args) {
   if (argc < 2) {
-    fprintf(stderr, "Usage: %s <tcp_port> <udp_port>\n", args[0]);
+    fprintf(stderr, "Usage: %s <tcp_port> <freq>\n", args[0]);
     exit(1);
   }
 
   server_tcp_port = atoi(args[1]);
-  server_udp_port = atoi(args[2]);
+  freq = atoi(args[2]);
+
+  if(freq < 0 || LONG_FREQ_MS % freq != 0) {
+	fprintf(stderr, "Invalid freq value: %d\n", freq);
+	if(LONG_FREQ_MS % freq != 0) {
+		fprintf(stderr, "Freq must divide %d\n", LONG_FREQ_MS);
+	}
+	exit(1);
+  }
+
   int sock = prepare_socket_and_listen(server_tcp_port);
 
   Match *current_match_4_opponents = NULL;
@@ -84,7 +96,7 @@ void start_match(Match* match) {
   context->match = match;
 
   launch_thread(match_handler, context);
-  // TODO launch another thread for the timed updates
+  launch_thread(match_updater_thread_handler, context);
 }
 
 /* Used by the main thread to decide if it should setup a new match with no players */
@@ -132,7 +144,7 @@ void send_new_match_info_message(Match *match, int player_index, int mode) {
   SET_ID(&message.header, match->players[player_index]);
   SET_EQ(&message.header, match->players_team[player_index]);
 
-  message.port_udp = htons(server_udp_port);
+  message.port_udp = htons(match->udp_server_port);
   message.port_mdiff = htons(match->multicast_port);
 
   struct sockaddr_in6 address;
@@ -158,7 +170,8 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
       int current_player_index;
       if(*current_4_opponents == NULL) {
         printf(" There are no current pending matches, so we'll start one\n");
-        Match *new_match = create_new_match_4_opponents(client_socket, current_udp_port, HEIGHT, WIDTH, MULTICAST_ADDRESS);
+        Match *new_match = create_new_match_4_opponents(client_socket, current_udp_port, HEIGHT, WIDTH, MULTICAST_ADDRESS, freq);
+        current_udp_port++;
         current_player_index = new_match->players[0];
         *current_4_opponents = new_match;
         launch_tcp_player_handler(new_match, current_player_index);
@@ -172,7 +185,8 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
       printf("Player wants to join a match with 2 teams.");
       if(*current_2_teams == NULL) {
         printf(" There are no current pending matches, so we'll start one\n");
-        Match *new_match = create_new_match_2_teams(client_socket, current_udp_port, HEIGHT, WIDTH, MULTICAST_ADDRESS);
+        Match *new_match = create_new_match_2_teams(client_socket, current_udp_port, HEIGHT, WIDTH, MULTICAST_ADDRESS, freq);
+        current_udp_port++;
         current_player_index = new_match->players[0];
         *current_2_teams = new_match;
         launch_tcp_player_handler(new_match, current_player_index);
@@ -222,8 +236,7 @@ void *match_handler(void *arg) {
   while(1) {
     ActionMessage action_message;
     
-    // TODO this port is not listening yet
-    read_loop(match->multicast_port, &action_message, sizeof(ActionMessage), 0);
+    read_loop(match->udp_server_port, &action_message, sizeof(ActionMessage), 0);
 
     if((GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_4_OPPONENTS
         || (GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_2_TEAMS) {
@@ -231,6 +244,26 @@ void *match_handler(void *arg) {
           continue;
     };
 
-    handle_action_message(match, GET_NUM(&action_message), GET_ACTION(&action_message));
+    handle_action_message(match, action_message);
+  }
+}
+
+void *match_updater_thread_handler(void *arg) {
+  MatchHandlerThreadContext *context = (MatchHandlerThreadContext *) arg;
+  Match *match = context->match;
+
+  int short_update_count_before_full_update = LONG_FREQ_MS / match->freq;
+
+  while(1) {
+	for(int i = 0; i < short_update_count_before_full_update; i++) {
+		process_partial_updates(match);
+		struct timespec req = {0};
+		req.tv_sec = 0;
+		req.tv_nsec = match->freq * 1000000;
+		nanosleep(&req, (struct timespec *)NULL);
+	}
+	send_full_grid_to_all_players(match);
+
+	// TODO explode bombs every 3 seconds
   }
 }

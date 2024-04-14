@@ -15,6 +15,7 @@
         "in.h": "c",
         "network.h": "c",
         "context.h": "c",
-        "poll.h": "c"
+        "poll.h": "c",
+        "util.h": "c"
     }
 }
