@@ -16,7 +16,19 @@
             "externalConsole": false,
             "MIMode": "lldb",
             "preLaunchTask": "build client"
+        },
+        {
+            "name": "Launch server",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/serveur",
+            "args": ["15000", "100"],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "preLaunchTask": "build client"
         }
-
     ]
 }

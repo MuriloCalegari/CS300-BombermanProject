@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <poll.h>
 
 int launch_thread(void *(*start_routine)(void *), void *arg) {
     pthread_t *thread = malloc(sizeof(pthread_t)); // Consider storing somewhere

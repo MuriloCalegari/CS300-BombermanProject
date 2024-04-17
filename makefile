@@ -24,4 +24,4 @@ util.o : $(COMMON)/util.c
 
 .PHONY: clean
 clean:
-	rm -rf client serveur serveur.o network.o util.o match.o /client.dSYM /serveur.dSYM
+	rm -rf client serveur serveur.o network.o util.o match.o client.dSYM /serveur.dSYM

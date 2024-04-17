@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include "match.h"
+#include "common/messages.h"
 
 int connect_to_server(int port, char* addr){
     //*** create socket ***
