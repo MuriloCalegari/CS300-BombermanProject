@@ -1,2 +1,7 @@
+#ifdef DEBUG
+    #define DEBUG_PRINTF(...) printf("DEBUG: " __VA_ARGS__)
+#else
+    #define DEBUG_PRINTF(...) do {} while (0)
+#endif
+
 int launch_thread(void *(*start_routine)(void *), void *arg);
-void sockets_to_pollfds(int *sockets, struct pollfd *pollfds, int nb_sockets);

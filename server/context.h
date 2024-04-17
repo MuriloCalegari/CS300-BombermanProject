@@ -32,8 +32,8 @@ typedef struct Match {
     int players_current_position[MAX_PLAYERS_PER_MATCH]; // Players' current position in the grid
 
     struct sockaddr_storage multicast_addr;
-    uint8_t multicast_port; // in host endianness
-    uint8_t udp_server_port; // in host endianness
+    uint16_t multicast_port; // in host endianness
+    uint16_t udp_server_port; // in host endianness
     int socket_udp;
 
     uint16_t full_update_current_num;

@@ -14,6 +14,7 @@
 #include "common/util.h"
 
 #define LONG_FREQ_MS 1000
+#define BOMB_TIME_TO_EXPLODE 3000
 #define HEIGHT 16
 #define WIDTH 16
 #define PLAYERS_PER_MATCH 4
@@ -59,7 +60,7 @@ int main(int argc, char** args) {
   Match *current_match_2_teams = NULL;
 
   while(1){
-    printf("Waiting for next player to connect...\n");
+    printf("\n--- Waiting for next player to connect... ---\n\n");
 
     int client_socket = wait_for_next_player(sock);
     printf("Player connected. Reading first message from player\n");
@@ -70,10 +71,12 @@ int main(int argc, char** args) {
     handle_first_tcp_message(client_socket, message_header, &current_match_4_opponents, &current_match_2_teams);
 
     if(should_setup_new_match(current_match_4_opponents)) {
+      DEBUG_PRINTF("MAIN: Setting current_match_4_opponents to NULL");
       current_match_4_opponents = NULL;
     }
 
     if(should_setup_new_match(current_match_2_teams)) {
+      DEBUG_PRINTF("MAIN: Setting current_match_2_teams to NULL");
       current_match_2_teams = NULL;
     }
   }
@@ -128,7 +131,7 @@ void handle_client_ready_to_play(MessageHeader message_header, Match *match) {
       match->players_ready_status[i] = 1;
     }
   }
-  pthread_mutex_lock(&match->mutex);
+  pthread_mutex_unlock(&match->mutex);
 }
 
 void send_new_match_info_message(Match *match, int player_index, int mode) {
@@ -169,7 +172,7 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
       printf("Player wants to join a match with 4 opponents.");
       int current_player_index;
       if(*current_4_opponents == NULL) {
-        printf(" There are no current pending matches, so we'll start one\n");
+        printf(" There are no current pending matches, so we'll start one on port %d\n", current_udp_port);
         Match *new_match = create_new_match_4_opponents(client_socket, current_udp_port, HEIGHT, WIDTH, MULTICAST_ADDRESS, freq);
         current_udp_port++;
         current_player_index = new_match->players[0];
@@ -178,6 +181,7 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
       } else {
         printf(" There is a pending match, so we'll add this player to it\n");
         current_player_index = add_player_to_match_4_opponents(*current_4_opponents, client_socket);
+        launch_tcp_player_handler(*current_4_opponents, current_player_index);
       }
       send_new_match_info_message(*current_4_opponents, current_player_index, FOUR_OPPONENTS_MODE);
       break;
@@ -193,6 +197,7 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
       } else {
         printf(" There is a pending match, so we'll add this player to it\n");
         current_player_index = add_player_to_match_2_teams(*current_2_teams, client_socket);
+        launch_tcp_player_handler(*current_2_teams, current_player_index);
       }
       send_new_match_info_message(*current_2_teams, current_player_index, TEAM_MODE);
       break;
@@ -207,6 +212,8 @@ void *tcp_player_handler(void *arg) {
   Match *match = context->match;
   int player_index = context->player_index;
 
+  printf("TCP_HANDLER: Thread initialized for player %d, waiting for client to be ready\n", player_index);
+
   while(1) {
     MessageHeader message_header;
     read_loop(match->sockets_tcp[player_index], &message_header, sizeof(MessageHeader), 0);
@@ -220,8 +227,8 @@ void *tcp_player_handler(void *arg) {
         pthread_mutex_lock(&match->mutex);
         if(can_start_match(match)) {
           start_match(match);
-          pthread_mutex_unlock(&match->mutex);
         }
+        pthread_mutex_unlock(&match->mutex);
         break;
     }
   }
@@ -254,16 +261,23 @@ void *match_updater_thread_handler(void *arg) {
 
   int short_update_count_before_full_update = LONG_FREQ_MS / match->freq;
 
-  while(1) {
-	for(int i = 0; i < short_update_count_before_full_update; i++) {
-		process_partial_updates(match);
-		struct timespec req = {0};
-		req.tv_sec = 0;
-		req.tv_nsec = match->freq * 1000000;
-		nanosleep(&req, (struct timespec *)NULL);
-	}
-	send_full_grid_to_all_players(match);
+  int elapsed_time_ms = 0;
 
-	// TODO explode bombs every 3 seconds
+  while(1) {
+    for(int i = 0; i < short_update_count_before_full_update; i++) {
+      process_partial_updates(match);
+      struct timespec req = {0};
+      req.tv_sec = 0;
+      req.tv_nsec = match->freq * 1000000;
+      nanosleep(&req, (struct timespec *)NULL);
+      elapsed_time_ms += match->freq;
+    }
+
+    if(elapsed_time_ms >= BOMB_TIME_TO_EXPLODE) {
+      explode_bombs(match);
+      elapsed_time_ms = 0;
+    }
+
+    send_full_grid_to_all_players(match);
   }
 }

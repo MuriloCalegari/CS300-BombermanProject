@@ -14,10 +14,3 @@ int launch_thread(void *(*start_routine)(void *), void *arg) {
 
     return 0;
 }
-
-void sockets_to_pollfds(int *sockets, struct pollfd *pollfds, int nb_sockets) {
-    for (int i = 0; i < nb_sockets; i++) {
-        pollfds[i].fd = sockets[i];
-        pollfds[i].events = POLLIN;
-    }
-}

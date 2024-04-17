@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../common/util.h"
 #include "network.h"
 
 void fill_address(struct sockaddr_storage *dst, int current_udp_port,
@@ -49,25 +50,24 @@ int get_player_team(int initial_position, int width, int height) {
   }
 }
 
-Match *create_new_match_4_opponents(int client_socket, int current_udp_port,
-                                    int height, int width,
-                                    char *multicast_address, int freq) {
-  printf("Creating a new match for 4 opponents\n");
+Match *create_new_match(int client_socket, int udp_port, int height, int width,
+                        char *multicast_address, int freq, int mode) {
   Match *new_match = malloc(sizeof(Match));
   memset(new_match, 0, sizeof(Match));
 
   int player_id = 0;
 
-  new_match->mode = FOUR_OPPONENTS_MODE;
+  new_match->mode = mode;
   new_match->players_count = 1;
   new_match->players[player_id] = 0;
   new_match->sockets_tcp[player_id] = client_socket;
 
-  new_match->multicast_port = current_udp_port;
-  new_match->udp_server_port = current_udp_port;
-  new_match->socket_udp = setup_udp_listening_socket(new_match->udp_server_port);
+  new_match->multicast_port = udp_port;
+  new_match->udp_server_port = udp_port;
+  new_match->socket_udp =
+      setup_udp_listening_socket(new_match->udp_server_port);
 
-  fill_address(&new_match->multicast_addr, current_udp_port, multicast_address);
+  fill_address(&new_match->multicast_addr, udp_port, multicast_address);
 
   new_match->height = height;
   new_match->width = width;
@@ -78,13 +78,17 @@ Match *create_new_match_4_opponents(int client_socket, int current_udp_port,
   new_match->grid[initial_position] = ENCODE_PLAYER(player_id);
   new_match->players_current_position[player_id] = initial_position;
 
-  new_match->freq = freq;
+  if (mode == TEAM_MODE) {
+    new_match->players_team[player_id] =
+        get_player_team(initial_position, width, height);
+  }
 
+  new_match->freq = freq;
   pthread_mutex_init(&new_match->mutex, 0);
   return new_match;
 }
 
-int add_player_to_match_4_opponents(Match *match, int client_socket) {
+int add_player_to_match(Match *match, int client_socket, int mode) {
   pthread_mutex_lock(&match->mutex);
 
   int current_player_id = match->players_count;
@@ -97,72 +101,41 @@ int add_player_to_match_4_opponents(Match *match, int client_socket) {
   // Put the player on the grid
   int initial_position = get_player_initial_position(
       current_player_id, match->width, match->height);
-  match->grid[initial_position] = ENCODE_PLAYER(current_player_id);
   match->players_current_position[current_player_id] = initial_position;
+  match->grid[initial_position] = ENCODE_PLAYER(current_player_id);
+
+  if(mode == TEAM_MODE){
+    match->players_team[current_player_id] =
+        get_player_team(initial_position, match->width, match->height);
+  }
 
   pthread_mutex_unlock(&match->mutex);
 
   return current_player_id;
+}
+
+Match *create_new_match_4_opponents(int client_socket, int current_udp_port,
+                                    int height, int width,
+                                    char *multicast_address, int freq) {
+  printf("Creating a new match for 4 opponents\n");
+  return create_new_match(client_socket, current_udp_port, height, width,
+                          multicast_address, freq, FOUR_OPPONENTS_MODE);
+}
+
+int add_player_to_match_4_opponents(Match *match, int client_socket) {
+  return add_player_to_match(match, client_socket, FOUR_OPPONENTS_MODE);
 }
 
 Match *create_new_match_2_teams(int client_socket, int current_udp_port,
                                 int height, int width, char *multicast_address,
                                 int freq) {
   printf("Creating a new match for 2 teams\n");
-  Match *new_match = malloc(sizeof(Match));
-  memset(new_match, 0, sizeof(Match));
-
-  int player_id = 0;
-
-  new_match->mode = FOUR_OPPONENTS_MODE;
-  new_match->players_count = 1;
-  new_match->players[player_id] = 0;
-  new_match->sockets_tcp[player_id] = client_socket;
-
-  new_match->multicast_port = current_udp_port;
-  new_match->udp_server_port = current_udp_port;
-  new_match->socket_udp = setup_udp_listening_socket(new_match->udp_server_port);
-
-  fill_address(&new_match->multicast_addr, current_udp_port, multicast_address);
-
-  new_match->height = height;
-  new_match->width = width;
-  new_match->grid = malloc(height * width * sizeof(uint8_t));
-
-  // Put the player on the grid
-  int initial_position = get_player_initial_position(player_id, width, height);
-  new_match->grid[initial_position] = ENCODE_PLAYER(player_id);
-  new_match->players_current_position[player_id] = initial_position;
-  new_match->players_team[player_id] =
-      get_player_team(initial_position, width, height);
-
-  new_match->freq = freq;
-
-  pthread_mutex_init(&new_match->mutex, 0);
-  return new_match;
+  return create_new_match(client_socket, current_udp_port, height, width,
+                          multicast_address, freq, TEAM_MODE);
 }
 
 int add_player_to_match_2_teams(Match *match, int client_socket) {
-  pthread_mutex_lock(&match->mutex);
-
-  int current_player_id = match->players_count;
-
-  // Update current match status
-  match->players_count++;
-  match->players[current_player_id] = current_player_id;
-  match->sockets_tcp[current_player_id] = client_socket;
-
-  // Put the player on the grid
-  int initial_position = get_player_initial_position(
-      current_player_id, match->width, match->height);
-  match->players_current_position[current_player_id] = initial_position;
-  match->grid[initial_position] = ENCODE_PLAYER(current_player_id);
-  match->players_team[current_player_id] =
-      get_player_team(initial_position, match->width, match->height);
-
-  pthread_mutex_unlock(&match->mutex);
-
-  return current_player_id;
+  return add_player_to_match(match, client_socket, TEAM_MODE);
 }
 
 void initialize_grid(Match *match) {
@@ -171,26 +144,25 @@ void initialize_grid(Match *match) {
   memset(match->grid, EMPTY_CELL, grid_size * sizeof(*match->grid));
 
   // TODO place destructible and undestructible walls on the grid
-    for(int i = 1; i < match->height - 1; i++){
-      if(i % 2 == 0)continue;
-      for(int j = 1; j  < match->width - 1; j++){
-        if(j % 2 == 1){
-          match->grid[i * match->width + j] = INDESTRUCTIBLE_WALL;
-        }
+  for (int i = 1; i < match->height - 1; i++) {
+    if (i % 2 == 0) continue;
+    for (int j = 1; j < match->width - 1; j++) {
+      if (j % 2 == 1) {
+        match->grid[i * match->width + j] = INDESTRUCTIBLE_WALL;
       }
     }
-    srand(time(NULL));
-    int a_place = grid_size/3;
-    int nb = 0;
-    while(nb < a_place){
-      int i = rand() % (match->height - 2) + 1; 
-      int j = rand() % (match->width - 2) + 1;
-      if(match->grid[i * match->width + j] == EMPTY_CELL){
-        match->grid[i * match->width + j] = DESTRUCTIBLE_WALL;
-        nb++;
-      }
+  }
+  srand(time(NULL));
+  int a_place = grid_size / 3;
+  int nb = 0;
+  while (nb < a_place) {
+    int i = rand() % (match->height - 2) + 1;
+    int j = rand() % (match->width - 2) + 1;
+    if (match->grid[i * match->width + j] == EMPTY_CELL) {
+      match->grid[i * match->width + j] = DESTRUCTIBLE_WALL;
+      nb++;
     }
-    
+  }
 };
 
 // We use this constant such that a message with num [0, OVERFLOW_DETECTION]
@@ -223,7 +195,7 @@ void update_latest_bomb_drop(Match *match, int player_index, int num,
   uint16_t current_num = match->latest_bombs[player_index].num;
 
   if ((num > current_num) || has_overflown(current_num, num)) {
-    printf(
+    DEBUG_PRINTF(
         "Num is bigger than our previously stored num or it has overflown\n");
     match->latest_bombs[player_index].num = num;
     match->latest_bombs[player_index].action = action;
@@ -308,6 +280,8 @@ int move_player(Match *match, int player_index, int action,
   // before he moves, so we only update that old cell to an EMPTY_CELL if there
   // was no bomb there before
   if (match->grid[player_position] != BOMB) {
+    // TODO need to account for EXPLODED_BY_BOMB,
+    // probably use a bitmap of walls that have been exploded
     match->grid[player_position] = EMPTY_CELL;
   }
   match->grid[new_position] = ENCODE_PLAYER(player_index);
@@ -343,30 +317,38 @@ void drop_bomb(Match *match, int player_index, CellStatusUpdate *result) {
 void send_partial_updates(CellStatusUpdate *movement_updates,
                           int movement_count, CellStatusUpdate *bomb_updates,
                           int bomb_count, Match *match) {
-	MessageHeader header = {0};
-	SET_CODEREQ(&header, SERVER_PARTIAL_MATCH_UPDATE);
-	SET_ID(&header, 0);
-	SET_EQ(&header, 0);
-	
-	MatchUpdateHeader match_update_header;
-	memset(&match_update_header, 0, sizeof(match_update_header));
-	match_update_header.header = header;
-	match_update_header.num = match->partial_update_current_num;
-	match->partial_update_current_num++;
-	match_update_header.count = movement_count + bomb_count;
+  MessageHeader header = {0};
+  SET_CODEREQ(&header, SERVER_PARTIAL_MATCH_UPDATE);
+  SET_ID(&header, 0);
+  SET_EQ(&header, 0);
 
-	char *message = malloc(sizeof(match_update_header) + sizeof(CellStatusUpdate) * (movement_count + bomb_count));
-	memcpy(message, &match_update_header, sizeof(match_update_header));
-	memcpy(message + sizeof(match_update_header), movement_updates, sizeof(CellStatusUpdate) * movement_count);
-	memcpy(message + sizeof(match_update_header) + sizeof(CellStatusUpdate) * movement_count, bomb_updates, sizeof(CellStatusUpdate) * bomb_count);
+  MatchUpdateHeader match_update_header;
+  memset(&match_update_header, 0, sizeof(match_update_header));
+  match_update_header.header = header;
+  match_update_header.num = match->partial_update_current_num;
+  match->partial_update_current_num++;
+  match_update_header.count = movement_count + bomb_count;
 
-	int total_size = sizeof(match_update_header) + (sizeof(CellStatusUpdate) * (movement_count + bomb_count));
+  char *message =
+      malloc(sizeof(match_update_header) +
+             sizeof(CellStatusUpdate) * (movement_count + bomb_count));
+  memcpy(message, &match_update_header, sizeof(match_update_header));
+  memcpy(message + sizeof(match_update_header), movement_updates,
+         sizeof(CellStatusUpdate) * movement_count);
+  memcpy(message + sizeof(match_update_header) +
+             sizeof(CellStatusUpdate) * movement_count,
+         bomb_updates, sizeof(CellStatusUpdate) * bomb_count);
 
-	struct sockaddr_in6 address;
-	memcpy(&address, &match->multicast_addr, sizeof(address));
+  int total_size = sizeof(match_update_header) +
+                   (sizeof(CellStatusUpdate) * (movement_count + bomb_count));
 
-	printf("Multicasting partial updates\n");
-	write_loop_udp(match->socket_udp, message, total_size, &address, sizeof(address));
+  struct sockaddr_in6 address;
+  memcpy(&address, &match->multicast_addr, sizeof(address));
+
+  write_loop_udp(match->socket_udp, message, total_size, &address,
+                 sizeof(address));
+
+  free(message);
 }
 
 void process_partial_updates(Match *match) {
@@ -387,13 +369,16 @@ void process_partial_updates(Match *match) {
   // and then the bombs
   for (int player = 0; player < match->players_count; player++) {
     if (match->latest_movements[player].is_pending) {
-	  int result;
+      int result;
       switch (match->latest_movements[player].action) {
         case MOVE_NORTH:
         case MOVE_EAST:
         case MOVE_SOUTH:
         case MOVE_WEST:
-          result = move_player(match, player, match->latest_movements[player].action, &movement_updates[movement_count], &movement_updates[movement_count + 1]);
+          result =
+              move_player(match, player, match->latest_movements[player].action,
+                          &movement_updates[movement_count],
+                          &movement_updates[movement_count + 1]);
           if (result == SUCCESS) {
             movement_count += 2;
           }
@@ -418,28 +403,37 @@ void process_partial_updates(Match *match) {
 }
 
 void send_full_grid_to_all_players(Match *match) {
-	for(int i = 0; i < match->players_count; i++) {
-		MessageHeader header = {0};
-		SET_CODEREQ(&header, SERVER_FULL_MATCH_STATUS);
-		SET_ID(&header, 0);
-		SET_EQ(&header, 0);
-		
-		MatchFullUpdateHeader match_update_header;
-		memset(&match_update_header, 0, sizeof(match_update_header));
-		match_update_header.header = header;
-		match_update_header.num = match->full_update_current_num;
-		match->full_update_current_num++;
-		match_update_header.height = match->height;
-		match_update_header.width = match->width;
+  for (int i = 0; i < match->players_count; i++) {
+    MessageHeader header = {0};
+    SET_CODEREQ(&header, SERVER_FULL_MATCH_STATUS);
+    SET_ID(&header, 0);
+    SET_EQ(&header, 0);
 
-		char *message = malloc(sizeof(match_update_header) + sizeof(uint8_t) * match->height * match->width);
-		memcpy(message, &match_update_header, sizeof(match_update_header));
-		memcpy(message + sizeof(match_update_header), match->grid, sizeof(uint8_t) * match->height * match->width);
+    MatchFullUpdateHeader match_update_header;
+    memset(&match_update_header, 0, sizeof(match_update_header));
+    match_update_header.header = header;
+    match_update_header.num = match->full_update_current_num;
+    match->full_update_current_num++;
+    match_update_header.height = match->height;
+    match_update_header.width = match->width;
 
-		int total_size = sizeof(match_update_header) + sizeof(uint8_t) * match->height * match->width;
+    char *message = malloc(sizeof(match_update_header) +
+                           sizeof(uint8_t) * match->height * match->width);
+    memcpy(message, &match_update_header, sizeof(match_update_header));
+    memcpy(message + sizeof(match_update_header), match->grid,
+           sizeof(uint8_t) * match->height * match->width);
 
-		write_loop(match->sockets_tcp[i], message, total_size, 0);
+    int total_size = sizeof(match_update_header) +
+                     sizeof(uint8_t) * match->height * match->width;
 
-		free(message);
-	}
+    struct sockaddr_in6 address;
+    memcpy(&address, &match->multicast_addr, sizeof(address));
+
+    write_loop_udp(match->socket_udp, message, total_size, &address,
+                  sizeof(address));
+
+    free(message);
+  }
 }
+
+void explode_bombs(Match *match) { return; }

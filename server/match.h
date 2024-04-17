@@ -11,3 +11,5 @@ void handle_action_message(Match *match, ActionMessage actionMessage);
 
 void process_partial_updates(Match *match);
 void send_full_grid_to_all_players(Match *match);
+
+void explode_bombs(Match* match);
