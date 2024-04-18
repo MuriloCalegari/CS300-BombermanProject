@@ -11,22 +11,8 @@
 #include <ncurses.h>
 #include <string.h>
 #include <net/if.h>
-#include "common/messages.h"
 #include "ncurses/ncurses.h"
 #include "client/context.h"
-
-int modulo_2_13(int n);
-
-typedef struct player {
-    int socket_tcp;
-    int socket_udp;
-    int id;
-    int eq;
-    int num;
-    int mode;
-    uint8_t adr_udp[16];
-    int port_udp;
-} player;
 
 int connect_to_server(int port, char* addr){
     //*** create socket ***
@@ -85,7 +71,11 @@ int start_match(player pl, int mode) {
     if(recv(pl.socket_tcp, &resp, sizeof(resp), 0) <= 0){
         perror("start_match, recv");
     }
+
     // codereq check
+    resp.header.header_line = ntohs(resp.header.header_line); // convert
+    int test = GET_CODEREQ(&resp.header);
+    printf("codereq %d\n", test);
     if(((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_4_OPPONENTS && mode == MODE_NO_TEAM) ||
     ((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_2_TEAMS && mode == MODE_2_TEAM)) {
         perror("start_match, error recv codereq");
@@ -167,7 +157,11 @@ int tchat_message(player pl, char *data){
     message.header.header_line = htons(message.header.header_line);
 
     message.data_len = strlen(data);
-//    message.data = data; TODO FIX
+    int i;
+    for(i=0; i<message.data_len-1; i++){
+        message.data[i] = data[i];
+    }
+    message.data[i+1] = 0;
 
     if(send(pl.socket_tcp, &message, sizeof(message), 0) == -1){
         perror("tchat_message, send");
@@ -186,7 +180,7 @@ int udp_message(player pl, int action){
     }
     SET_EQ(&buffer.message_header, pl.eq);
     SET_ID(&buffer.message_header, pl.id);
-    SET_NUM(&buffer, modulo_2_13(pl.num));
+    SET_NUM(&buffer, (pl.num % NUM_MAX));
     pl.num = pl.num+1;
     SET_ACTION(&buffer, action);
 
@@ -240,20 +234,20 @@ int tchat(player pl){
                 if(lw->cursor > 0){
                     tchat_message(pl, lw->data);
                     lw->cursor=0;
-                    memset(lw->data, 0, TEXT_SIZE);
+                    memset(lw->data, 0, SIZE_MAX_MESSAGE);
                 }
                 break;
             case 2: //left
-                udp_message(pl, 3);
+                udp_message(pl, MOVE_WEST);
                 break;
             case 3: //right
-                udp_message(pl, 1);
+                udp_message(pl, MOVE_EAST);
                 break;
             case 4: //up
-                udp_message(pl, 0);
+                udp_message(pl, MOVE_NORTH);
                 break;
             case 5: //down
-                udp_message(pl, 2);
+                udp_message(pl, MOVE_SOUTH);
                 break;
             case 6: //bomb
             // TODO
@@ -307,11 +301,4 @@ int main(int argc, char** args){
     close(pl.socket_tcp);
 
     return 0;
-}
-
-int modulo_2_13(int n) {
-    while (n >= (1 << 13)) {
-        n -= (1 << 13);
-    }
-    return n;
 }

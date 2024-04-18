@@ -67,7 +67,7 @@ void refresh_game(board* b, line_w* lw, line_r* lr) {
     }
     // tchat write
     for (x = 0; x < b->w+2; x++) {
-        if (x >= TEXT_SIZE || x >= lw->cursor)
+        if (x >= SIZE_MAX_MESSAGE || x >= lw->cursor)
             mvaddch(b->h+2+3, x, ' ');
         else
             mvaddch(b->h+2+3, x, lw->data[x]);
@@ -107,7 +107,7 @@ ACTION control(line_w* l) {
         case '\n': 
             a = ENTER; break;
         default:
-            if (prev_c >= ' ' && prev_c <= '~' && l->cursor < TEXT_SIZE)
+            if (prev_c >= ' ' && prev_c <= '~' && l->cursor < SIZE_MAX_MESSAGE)
                 l->data[(l->cursor)++] = prev_c;
             break;
     }

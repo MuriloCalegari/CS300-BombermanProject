@@ -2,8 +2,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../common/messages.h"
 
-#define TEXT_SIZE 150
 #define MAX_VERTICAL_LINE 3
 
 typedef enum ACTION { NONE, UP, DOWN, LEFT, RIGHT, QUIT, ENTER } ACTION;
@@ -15,12 +15,12 @@ typedef struct board {
 } board;
 
 typedef struct line_r{
-    char data[MAX_VERTICAL_LINE][TEXT_SIZE];
+    char data[MAX_VERTICAL_LINE][SIZE_MAX_MESSAGE];
     int len[MAX_VERTICAL_LINE];
 } line_r;
 
 typedef struct line_w {
-    char data[TEXT_SIZE];
+    char data[SIZE_MAX_MESSAGE];
     int cursor;
 } line_w;
 

@@ -38,7 +38,7 @@ void *match_updater_thread_handler(void *arg);
 */
 
 int main(int argc, char** args) {
-  if (argc < 2) {
+  if (argc != 3) {
     fprintf(stderr, "Usage: %s <tcp_port> <freq>\n", args[0]);
     exit(1);
   }
@@ -68,6 +68,7 @@ int main(int argc, char** args) {
     MessageHeader message_header;
     
     read_loop(client_socket, &message_header, sizeof(MessageHeader), 0);
+    message_header.header_line = ntohs(message_header.header_line);
     handle_first_tcp_message(client_socket, message_header, &current_match_4_opponents, &current_match_2_teams);
 
     if(should_setup_new_match(current_match_4_opponents)) {
@@ -166,6 +167,26 @@ void launch_tcp_player_handler(Match *match, int player_index) {
   launch_thread(tcp_player_handler, context);
 }
 
+void send_config_player(Match *match, int player_index){
+  NewMatchMessage msg;
+  memset(&msg, 0, sizeof(NewMatchMessage));
+
+  if(match->mode == FOUR_OPPONENTS_MODE){
+    SET_CODEREQ(&msg.header, SERVER_RESPONSE_MATCH_START_4_OPPONENTS);
+  }else{
+    SET_CODEREQ(&msg.header, SERVER_RESPONSE_MATCH_START_2_TEAMS);
+  }
+
+  SET_EQ(&msg.header, match->players_team[player_index]);
+  SET_ID(&msg.header, match->players[player_index]);
+  msg.header.header_line = htons(msg.header.header_line);
+  memcpy(&msg.adr_mdiff , MULTICAST_ADDRESS, sizeof(MULTICAST_ADDRESS));
+  msg.port_udp = match->socket_udp;
+  msg.port_mdiff = match->multicast_port;
+
+  write_loop(match->sockets_tcp[player_index], &msg, sizeof(NewMatchMessage), 0); 
+}
+
 void handle_first_tcp_message(int client_socket, MessageHeader message_header, Match **current_4_opponents, Match **current_2_teams) {
   switch(GET_CODEREQ(&(message_header))) {
     case NEW_MATCH_4_OPPONENTS:
@@ -177,10 +198,12 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
         current_udp_port++;
         current_player_index = new_match->players[0];
         *current_4_opponents = new_match;
+        send_config_player(*current_4_opponents, current_player_index);
         launch_tcp_player_handler(new_match, current_player_index);
       } else {
         printf(" There is a pending match, so we'll add this player to it\n");
         current_player_index = add_player_to_match_4_opponents(*current_4_opponents, client_socket);
+        send_config_player(*current_4_opponents, current_player_index);
         launch_tcp_player_handler(*current_4_opponents, current_player_index);
       }
       send_new_match_info_message(*current_4_opponents, current_player_index, FOUR_OPPONENTS_MODE);
@@ -193,10 +216,12 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
         current_udp_port++;
         current_player_index = new_match->players[0];
         *current_2_teams = new_match;
+        send_config_player(*current_2_teams, current_player_index);
         launch_tcp_player_handler(new_match, current_player_index);
       } else {
         printf(" There is a pending match, so we'll add this player to it\n");
         current_player_index = add_player_to_match_2_teams(*current_2_teams, client_socket);
+        send_config_player(*current_2_teams, current_player_index);
         launch_tcp_player_handler(*current_2_teams, current_player_index);
       }
       send_new_match_info_message(*current_2_teams, current_player_index, TEAM_MODE);
@@ -204,6 +229,38 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
     default:
       printf("Invalid CODEREQ %d for handle_first_tcp_message context", GET_CODEREQ(&(message_header)));
       exit(-1);
+  }
+}
+
+void send_message(Match *match, int player_index, int mode){
+  // get_message
+  TChatHeader msg;
+  uint8_t len;
+  read_loop(match->sockets_tcp[player_index], &len, sizeof(uint8_t), 0);
+  uint8_t data[len];
+  read_loop(match->sockets_tcp[player_index], data, len, 0);
+
+  if(mode == T_CHAT_ALL_PLAYERS){
+    for(int i=0; (i<match->players_count) && (i!=player_index); i++){
+      SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_ALL_PLAYERS);
+      SET_ID(&msg.header, match->players[player_index]);
+      msg.header.header_line = htons(msg.header.header_line);
+      msg.data_len = len;
+      memcpy(&msg, data, len);
+
+      write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
+    }
+  }else {
+    for(int i=0; (i<match->players_count) && (i!=player_index) && (match->players_team[i]==match->players_team[player_index]); i++){
+      SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_TEAM);
+      SET_ID(&msg.header, match->players[player_index]);
+      SET_EQ(&msg.header, match->players_team[player_index]);
+      msg.header.header_line = htons(msg.header.header_line);
+      msg.data_len = len;
+      memcpy(&msg, data, len);
+
+      write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
+    }
   }
 }
 
@@ -217,9 +274,19 @@ void *tcp_player_handler(void *arg) {
   while(1) {
     MessageHeader message_header;
     read_loop(match->sockets_tcp[player_index], &message_header, sizeof(MessageHeader), 0);
+    message_header.header_line = ntohs(message_header.header_line);
 
     switch(GET_CODEREQ(&(message_header))) {
       case CLIENT_READY_TO_PLAY_4_OPPONENTS:
+        printf("Player %d is ready to play\n", GET_ID(&message_header));
+        handle_client_ready_to_play(message_header, match);
+
+        pthread_mutex_lock(&match->mutex);
+        if(can_start_match(match)) {
+          start_match(match);
+        }
+        pthread_mutex_unlock(&match->mutex);
+        break;
       case CLIENT_READY_TO_PLAY_2_TEAMS:
         printf("Player %d is ready to play\n", GET_ID(&message_header));
         handle_client_ready_to_play(message_header, match);
@@ -228,6 +295,16 @@ void *tcp_player_handler(void *arg) {
         if(can_start_match(match)) {
           start_match(match);
         }
+        pthread_mutex_unlock(&match->mutex);
+        break;
+      case T_CHAT_ALL_PLAYERS:
+        pthread_mutex_lock(&match->mutex);
+        send_message(match, player_index, T_CHAT_ALL_PLAYERS);
+        pthread_mutex_unlock(&match->mutex);
+        break;
+      case T_CHAT_TEAM:
+        pthread_mutex_lock(&match->mutex);
+        send_message(match, player_index, T_CHAT_ALL_PLAYERS);
         pthread_mutex_unlock(&match->mutex);
         break;
     }
