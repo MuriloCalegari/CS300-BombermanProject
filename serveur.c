@@ -153,7 +153,7 @@ void send_new_match_info_message(Match *match, int player_index, int mode) {
   struct sockaddr_in6 address;
   memcpy(&address, &match->multicast_addr, sizeof(address));
   memcpy(&message.adr_mdiff, &address.sin6_addr, sizeof(address.sin6_addr));
-  
+
   printf("Sending information to the player about their new match\n");
   write_loop(match->sockets_tcp[player_index], &message, sizeof(message), 0);
 }
@@ -242,7 +242,7 @@ void *match_handler(void *arg) {
 
   while(1) {
     ActionMessage action_message;
-    
+
     read_loop(match->udp_server_port, &action_message, sizeof(ActionMessage), 0);
 
     if((GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_4_OPPONENTS
