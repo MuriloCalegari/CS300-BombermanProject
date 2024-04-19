@@ -29,6 +29,13 @@ typedef struct pos {
     int y;
 } pos;
 
+typedef struct gameboard{
+    board *b;
+    line_r *lr;
+    line_w *lw;
+    pos *p;
+} gameboard;
+
 void setup_board(board* board);
 void free_board(board* board);
 int get_grid(board* b, int x, int y);
@@ -36,3 +43,5 @@ void set_grid(board* b, int x, int y, int v);
 void refresh_game(board* b, line_w* lw, line_r* lr);
 ACTION control(line_w* l);
 int perform_action(board* b, pos* p, ACTION a);
+gameboard* create_board();
+void free_gameboard(gameboard *g);

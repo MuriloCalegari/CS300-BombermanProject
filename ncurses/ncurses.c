@@ -6,6 +6,36 @@
 #include <string.h>
 #include "ncurses.h"
 
+gameboard* create_board(){
+    gameboard* g = malloc(sizeof(gameboard));
+    g->b = malloc(sizeof(board));;
+    g->lr = malloc(sizeof(line_r));
+    g->lw = malloc(sizeof(line_w));
+    g->lw->cursor = 0;
+    g->p = malloc(sizeof(pos));
+    g->p->x = 0; g->p->y = 0;
+
+    // NOTE: All ncurses operations (getch, mvaddch, refresh, etc.) must be done on the same thread.
+    initscr(); /* Start curses mode */
+    raw(); /* Disable line buffering */
+    intrflush(stdscr, FALSE); /* No need to flush when intr key is pressed */
+    keypad(stdscr, TRUE); /* Required in order to get events from keyboard */
+    nodelay(stdscr, TRUE); /* Make getch non-blocking */
+    noecho(); /* Don't echo() while we do getch (we will manually print characters when relevant) */
+    curs_set(0); // Set the cursor to invisible
+    start_color(); // Enable colors
+    init_pair(1, COLOR_YELLOW, COLOR_BLACK); // Define a new color style (text is yellow, background is black)
+    setup_board(g->b);
+    return g;
+}
+
+void free_gameboard(gameboard *g){
+    free_board(g->b);
+    free(g->lr);
+    free(g->lw);
+    free(g->p);
+}
+
 
 void setup_board(board* board) {
     int lines; int columns;
@@ -17,6 +47,7 @@ void setup_board(board* board) {
 
 void free_board(board* board) {
     free(board->grid);
+    free(board);
 }
 
 int get_grid(board* b, int x, int y) {

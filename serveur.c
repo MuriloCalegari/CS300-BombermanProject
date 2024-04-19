@@ -147,6 +147,7 @@ void send_new_match_info_message(Match *match, int player_index, int mode) {
 
   SET_ID(&message.header, match->players[player_index]);
   SET_EQ(&message.header, match->players_team[player_index]);
+  message.header.header_line = htons(message.header.header_line);
 
   message.port_udp = htons(match->udp_server_port);
   message.port_mdiff = htons(match->multicast_port);
@@ -167,26 +168,6 @@ void launch_tcp_player_handler(Match *match, int player_index) {
   launch_thread(tcp_player_handler, context);
 }
 
-void send_config_player(Match *match, int player_index){
-  NewMatchMessage msg;
-  memset(&msg, 0, sizeof(NewMatchMessage));
-
-  if(match->mode == FOUR_OPPONENTS_MODE){
-    SET_CODEREQ(&msg.header, SERVER_RESPONSE_MATCH_START_4_OPPONENTS);
-  }else{
-    SET_CODEREQ(&msg.header, SERVER_RESPONSE_MATCH_START_2_TEAMS);
-  }
-
-  SET_EQ(&msg.header, match->players_team[player_index]);
-  SET_ID(&msg.header, match->players[player_index]);
-  msg.header.header_line = htons(msg.header.header_line);
-  memcpy(&msg.adr_mdiff , MULTICAST_ADDRESS, sizeof(MULTICAST_ADDRESS));
-  msg.port_udp = match->socket_udp;
-  msg.port_mdiff = match->multicast_port;
-
-  write_loop(match->sockets_tcp[player_index], &msg, sizeof(NewMatchMessage), 0); 
-}
-
 void handle_first_tcp_message(int client_socket, MessageHeader message_header, Match **current_4_opponents, Match **current_2_teams) {
   switch(GET_CODEREQ(&(message_header))) {
     case NEW_MATCH_4_OPPONENTS:
@@ -198,12 +179,10 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
         current_udp_port++;
         current_player_index = new_match->players[0];
         *current_4_opponents = new_match;
-        send_config_player(*current_4_opponents, current_player_index);
         launch_tcp_player_handler(new_match, current_player_index);
       } else {
         printf(" There is a pending match, so we'll add this player to it\n");
         current_player_index = add_player_to_match_4_opponents(*current_4_opponents, client_socket);
-        send_config_player(*current_4_opponents, current_player_index);
         launch_tcp_player_handler(*current_4_opponents, current_player_index);
       }
       send_new_match_info_message(*current_4_opponents, current_player_index, FOUR_OPPONENTS_MODE);
@@ -216,12 +195,10 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
         current_udp_port++;
         current_player_index = new_match->players[0];
         *current_2_teams = new_match;
-        send_config_player(*current_2_teams, current_player_index);
         launch_tcp_player_handler(new_match, current_player_index);
       } else {
         printf(" There is a pending match, so we'll add this player to it\n");
         current_player_index = add_player_to_match_2_teams(*current_2_teams, client_socket);
-        send_config_player(*current_2_teams, current_player_index);
         launch_tcp_player_handler(*current_2_teams, current_player_index);
       }
       send_new_match_info_message(*current_2_teams, current_player_index, TEAM_MODE);
