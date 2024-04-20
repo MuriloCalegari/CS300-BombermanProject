@@ -656,17 +656,15 @@ void finish_match(Match* match, int result) {
 
   end_game_message.header_line = htons(end_game_message.header_line);
 
+  printf("Cancelling all other threads...\n");
   for(int i = 0; i < match->players_count; i++) {
-    printf("Sending end game message to player %d\n", i);
-    write_loop(match->sockets_tcp[i], &end_game_message, sizeof(end_game_message), 0);
     pthread_cancel(*match->tcp_player_handler_threads[i]);
   }
-
   pthread_cancel(*match->match_handler_thread);
 
   pthread_mutex_unlock(&match->mutex);
 
-  printf("Waiting for all threads to finish...\n");
+  printf("Waiting for all other threads to finish...\n");
   // TODO need to test if this will work
   pthread_join(*match->match_handler_thread, NULL);
   free(match->match_handler_thread);
@@ -675,6 +673,8 @@ void finish_match(Match* match, int result) {
     printf("Waiting for player %d thread to finish...\n", i);
     pthread_join(*match->tcp_player_handler_threads[i], NULL);
     free(match->tcp_player_handler_threads[i]);
+    printf("Sending end game message to player %d\n", i);
+    write_loop(match->sockets_tcp[i], &end_game_message, sizeof(end_game_message), 0);
     close(match->sockets_tcp[i]);
   }
 
