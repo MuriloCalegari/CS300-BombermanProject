@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include "../common/util.h"
 #include "network.h"
 
@@ -312,6 +313,22 @@ void drop_bomb(Match *match, int player_index, CellStatusUpdate *result) {
 
   result->row = row;
   result->col = col;
+
+  Bomb *bomb = malloc(sizeof(Bomb));
+  bomb->row = row;
+  bomb->col = col;
+  bomb->player = player_index;
+  bomb->seconds_counter = BOMB_TIME_TO_EXPLODE_SECONDS;
+  bomb->next = NULL;
+
+  if (match->bombs_head == NULL) {
+    match->bombs_head = bomb;
+    match->bombs_tail = bomb;
+  } else {
+    bomb->prev = match->bombs_tail;
+    match->bombs_tail->next = bomb;
+    match->bombs_tail = bomb;
+  }
 }
 
 void send_partial_updates(CellStatusUpdate *movement_updates,
@@ -367,6 +384,7 @@ void process_partial_updates(Match *match) {
   // From the spec, "le serveur prend en compte un déplacement vers l’ouest avec
   // dépôt de bombe sur la case d’arrivée," so we process the movements first
   // and then the bombs
+  pthread_mutex_lock(&match->mutex);
   for (int player = 0; player < match->players_count; player++) {
     if (match->latest_movements[player].is_pending) {
       int result;
@@ -397,6 +415,7 @@ void process_partial_updates(Match *match) {
       bomb_count++;
     }
   }
+  pthread_mutex_unlock(&match->mutex);
 
   send_partial_updates(movement_updates, movement_count, bomb_updates,
                        bomb_count, match);
@@ -436,4 +455,99 @@ void send_full_grid_to_all_players(Match *match) {
   }
 }
 
-void explode_bombs(Match *match) { return; }
+void kill_or_explode(Match* match, int i, int j) {
+    int cell = i * match->width + j;
+
+    // Check if the nearby cell contains a destructible wall
+    if (match->grid[cell] == DESTRUCTIBLE_WALL) {
+      match->grid[cell] = EXPLODED_BY_BOMB; // Destroy the wall
+    } else if (match->grid[cell] >= PLAYER_OFFSET) {
+      int player = DECODE_PLAYER(match->grid[cell]);
+      match->player_status[player] = DEAD;
+      match->players_current_position[player] = -1;
+    }
+}
+
+void explode_bomb(Match* match, int i, int j){
+  // Check if the bomb is within the grid boundaries
+  if (i < 0 || i >= match->height || j < 0 || j >= match->width) {
+    printf("Warning: called explode_bomb on cell out of bounds\n");
+    return;
+  }
+
+  // Check if the cell contains a bomb
+  int cell = i * match->width + j;
+  if (match->grid[cell] != BOMB) {
+    printf("Warning: called explode_bomb on cell without a bomb in it\n");
+    return;
+  }
+
+  DEBUG_PRINTF("Exploding bomb at (%d, %d)\n", i, j);
+
+  // TODO need to account for EXPLODED_BY_BOMB,
+  // probably use a bitmap of walls that have been exploded
+  match->grid[cell] = EMPTY_CELL; // Remove the bomb
+
+  // Vertical explosions
+  for(int k = -2; k <= 2; k++) {
+    int ni = i + k;
+    if (ni >= 0 && ni < match->height) {
+      kill_or_explode(match, ni, j);
+    }
+  }
+
+  // Horizontal explosions
+  for(int l = -2; l <= 2; l++) {
+    int nj = j + l;
+    if (nj >= 0 && nj < match->width) {
+      kill_or_explode(match, i, nj);
+    }
+  }
+
+  // Diagonal explosions
+  for(int k = -1; k <= 1; k += 2) {
+    for(int l = -1; l <= 1; l += 2) {
+      int ni = i + k;
+      int nj = j + l;
+      if (ni >= 0 && ni < match->height && nj >= 0 && nj < match->width) {
+        kill_or_explode(match, ni, nj);
+      }
+    }
+  }
+}
+
+void explode_bombs(Match *match) {
+  pthread_mutex_lock(&match->mutex);
+  Bomb *current_bomb = match->bombs_head;
+
+  while (current_bomb != NULL) {
+    current_bomb->seconds_counter--;
+
+    if (current_bomb->seconds_counter == 0) {
+      explode_bomb(match, current_bomb->row, current_bomb->col);
+
+      // Remove the bomb from the list
+      if (current_bomb->prev != NULL && current_bomb->next != NULL) { // Bomb is in the middle
+        current_bomb->prev->next = current_bomb->next;
+        current_bomb->next->prev = current_bomb->prev;
+      } else if (current_bomb->prev == NULL) { // Bomb is at the head
+        match->bombs_head = current_bomb->next;
+        if (current_bomb->next != NULL) { // Could be null if only element
+          match->bombs_head->prev = NULL;
+        }
+      } else { // Bomb is at the tail
+        match->bombs_tail = current_bomb->prev;
+        if (current_bomb->prev != NULL) {
+          match->bombs_tail->next = NULL;
+        }
+      }
+
+      assert(check_bomb_linked_list_consistency(match));
+
+      free(current_bomb);
+    }
+
+    current_bomb = current_bomb->next;
+  }
+  pthread_mutex_unlock(&match->mutex);
+}

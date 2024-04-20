@@ -13,8 +13,6 @@
 #include "server/match.h"
 #include "common/util.h"
 
-#define LONG_FREQ_MS 1000
-#define BOMB_TIME_TO_EXPLODE 3000
 #define HEIGHT 16
 #define WIDTH 16
 #define PLAYERS_PER_MATCH 4
@@ -46,12 +44,15 @@ int main(int argc, char** args) {
   server_tcp_port = atoi(args[1]);
   freq = atoi(args[2]);
 
-  if(freq < 0 || LONG_FREQ_MS % freq != 0) {
-	fprintf(stderr, "Invalid freq value: %d\n", freq);
-	if(LONG_FREQ_MS % freq != 0) {
-		fprintf(stderr, "Freq must divide %d\n", LONG_FREQ_MS);
-	}
-	exit(1);
+  if(freq < 0 || LONG_FREQ_MS % freq != 0 || freq < MIN_SHORT_FREQ) {
+    fprintf(stderr, "Invalid freq value: %d\n", freq);
+    if(LONG_FREQ_MS % freq != 0) {
+      fprintf(stderr, "Freq must divide %d\n", LONG_FREQ_MS);
+    }
+    if(freq < MIN_SHORT_FREQ) {
+      fprintf(stderr, "Freq must be at least %d\n", MIN_SHORT_FREQ);
+    }
+    exit(1);
   }
 
   int sock = prepare_socket_and_listen(server_tcp_port);
@@ -117,7 +118,7 @@ int can_start_match(Match *match) {
   if(match->players_count != PLAYERS_PER_MATCH) return 0;
 
   for(int i = 0; i < PLAYERS_PER_MATCH; i++) {
-    if(!match->players_ready_status[i]) return 0;
+    if(!match->player_status[i]) return 0;
   }
 
   return 1;
@@ -128,7 +129,7 @@ void handle_client_ready_to_play(MessageHeader message_header, Match *match) {
   /* Find the respective player based on its socket number */
   for(int i = 0; i < match->players_count; i++) {
     if(match->players[i] == GET_ID(&message_header)) {
-      match->players_ready_status[i] = 1;
+      match->player_status[i] = READY_TO_PLAY;
     }
   }
   pthread_mutex_unlock(&match->mutex);
@@ -261,8 +262,6 @@ void *match_updater_thread_handler(void *arg) {
 
   int short_update_count_before_full_update = LONG_FREQ_MS / match->freq;
 
-  int elapsed_time_ms = 0;
-
   while(1) {
     for(int i = 0; i < short_update_count_before_full_update; i++) {
       process_partial_updates(match);
@@ -270,14 +269,9 @@ void *match_updater_thread_handler(void *arg) {
       req.tv_sec = 0;
       req.tv_nsec = match->freq * 1000000;
       nanosleep(&req, (struct timespec *)NULL);
-      elapsed_time_ms += match->freq;
     }
-
-    if(elapsed_time_ms >= BOMB_TIME_TO_EXPLODE) {
-      explode_bombs(match);
-      elapsed_time_ms = 0;
-    }
-
+    
+    explode_bombs(match);
     send_full_grid_to_all_players(match);
   }
 }

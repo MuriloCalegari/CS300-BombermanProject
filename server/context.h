@@ -13,11 +13,34 @@ socket information, current game status, etc.
 
 #define MAX_PLAYERS_PER_MATCH 4
 
+#define LONG_FREQ_MS 1000
+#define MIN_SHORT_FREQ 100
+
+#define BOMB_TIME_TO_EXPLODE_SECONDS 3
+
+// For each LONG_FREQ_MS, a player could but as much as
+// LONG_FREQ_MS / MIN_SHORT_FREQ bombs, so a maximum
+// of MAX_BOMBS_PER_PLAYER bombs per player can be at the game
+// at a given time
+#define MAX_BOMBS_PER_PLAYER \
+    ((LONG_FREQ_MS / MIN_SHORT_FREQ) * (BOMB_TIME_TO_EXPLODE_SECONDS + 1))
+
+typedef enum PLAYER_STATUS { CONNECTED, READY_TO_PLAY, DEAD } PLAYER_STATUS;
+
 typedef struct ActionBuf {
     uint16_t num;
     uint8_t action;
     uint8_t is_pending;
 } ActionBuf;
+
+typedef struct Bomb {
+    uint8_t row;
+    uint8_t col;
+    uint8_t player;
+    uint8_t seconds_counter;
+    struct Bomb *prev;
+    struct Bomb *next;
+} Bomb;
 
 typedef struct Match {
     uint8_t mode; // FOUR_OPPONENTS or TEAM_MODE
@@ -27,7 +50,7 @@ typedef struct Match {
     uint8_t players[MAX_PLAYERS_PER_MATCH]; // Players' IDs
     uint8_t players_team[MAX_PLAYERS_PER_MATCH]; // 0 or 1 for each player
     int sockets_tcp[MAX_PLAYERS_PER_MATCH]; // Players' sockets in TCP mode
-    uint8_t players_ready_status[MAX_PLAYERS_PER_MATCH];
+    uint8_t player_status[MAX_PLAYERS_PER_MATCH];
 
     int players_current_position[MAX_PLAYERS_PER_MATCH]; // Players' current position in the grid
 
@@ -49,6 +72,11 @@ typedef struct Match {
     ActionBuf latest_movements[MAX_PLAYERS_PER_MATCH];
     ActionBuf latest_bombs[MAX_PLAYERS_PER_MATCH];
     int freq;
+
+    Bomb *bombs_head;
+    Bomb *bombs_tail;
+
+    // Bomb bombs[MAX_PLAYERS_PER_MATCH][MAX_BOMBS_PER_PLAYER];
 
     pthread_mutex_t mutex;
 } Match;
