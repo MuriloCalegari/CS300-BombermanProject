@@ -69,6 +69,7 @@ int main(int argc, char** args) {
     MessageHeader message_header;
     
     read_loop(client_socket, &message_header, sizeof(MessageHeader), 0);
+    message_header.header_line = ntohs(message_header.header_line);
     handle_first_tcp_message(client_socket, message_header, &current_match_4_opponents, &current_match_2_teams);
 
     if(should_setup_new_match(current_match_4_opponents)) {
@@ -99,8 +100,8 @@ void start_match(Match* match) {
   MatchHandlerThreadContext *context = malloc(sizeof(MatchHandlerThreadContext));
   context->match = match;
 
-  launch_thread(match_handler, context);
-  launch_thread(match_updater_thread_handler, context);
+  match->match_handler_thread = launch_thread(match_handler, context);
+  match->match_updater_thread = launch_thread(match_updater_thread_handler, context);
 }
 
 /* Used by the main thread to decide if it should setup a new match with no players */
@@ -164,7 +165,7 @@ void launch_tcp_player_handler(Match *match, int player_index) {
   context->player_index = player_index;
   context->match = match;
 
-  launch_thread(tcp_player_handler, context);
+  match->tcp_player_handler_threads[player_index] = launch_thread(tcp_player_handler, context);
 }
 
 void handle_first_tcp_message(int client_socket, MessageHeader message_header, Match **current_4_opponents, Match **current_2_teams) {
@@ -208,10 +209,17 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
   }
 }
 
+void clean_arg(void *arg) {
+  printf("THREAD_HANDLER: Cleaning up thread context\n");
+  free(arg);
+}
+
 void *tcp_player_handler(void *arg) {
   PlayerHandlerThreadContext *context = (PlayerHandlerThreadContext *) arg;
   Match *match = context->match;
   int player_index = context->player_index;
+
+  pthread_cleanup_push(clean_arg, arg);
 
   printf("TCP_HANDLER: Thread initialized for player %d, waiting for client to be ready\n", player_index);
 
@@ -234,12 +242,16 @@ void *tcp_player_handler(void *arg) {
     }
   }
 
+  pthread_cleanup_pop(0);
+
   return NULL;
 }
 
 void *match_handler(void *arg) {
   MatchHandlerThreadContext *context = (MatchHandlerThreadContext *) arg;
   Match *match = context->match;
+
+  pthread_cleanup_push(clean_arg, arg);
 
   while(1) {
     ActionMessage action_message;
@@ -254,11 +266,15 @@ void *match_handler(void *arg) {
 
     handle_action_message(match, action_message);
   }
+
+  pthread_cleanup_pop(0);
 }
 
 void *match_updater_thread_handler(void *arg) {
   MatchHandlerThreadContext *context = (MatchHandlerThreadContext *) arg;
   Match *match = context->match;
+
+  pthread_cleanup_push(clean_arg, arg);
 
   int short_update_count_before_full_update = LONG_FREQ_MS / match->freq;
 
@@ -270,8 +286,18 @@ void *match_updater_thread_handler(void *arg) {
       req.tv_nsec = match->freq * 1000000;
       nanosleep(&req, (struct timespec *)NULL);
     }
-    
-    explode_bombs(match);
-    send_full_grid_to_all_players(match);
+
+    int result = should_finish_match(match);
+
+    if(result == NO_WINNER_YET) {
+      explode_bombs(match);
+      send_full_grid_to_all_players(match);
+    } else {
+      finish_match(match, result);  
+      break;
+    }
   }
+
+  pthread_cleanup_pop(0);
+  return NULL;
 }

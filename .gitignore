@@ -1,6 +1,6 @@
 **/*.dSYM/
 
-client
+run_client
 serveur
 
 **/*.o

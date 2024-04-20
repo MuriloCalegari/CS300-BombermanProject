@@ -76,9 +76,13 @@ typedef struct Match {
     Bomb *bombs_head;
     Bomb *bombs_tail;
 
-    // Bomb bombs[MAX_PLAYERS_PER_MATCH][MAX_BOMBS_PER_PLAYER];
+    uint8_t is_match_finished;
 
     pthread_mutex_t mutex;
+
+    pthread_t *match_handler_thread;
+    pthread_t *match_updater_thread;
+    pthread_t *tcp_player_handler_threads[MAX_PLAYERS_PER_MATCH];
 } Match;
 
 typedef struct PlayerHandlerThreadContext {

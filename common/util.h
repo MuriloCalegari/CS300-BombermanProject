@@ -4,4 +4,4 @@
     #define DEBUG_PRINTF(...) do {} while (0)
 #endif
 
-int launch_thread(void *(*start_routine)(void *), void *arg);
+pthread_t *launch_thread(void *(*start_routine)(void *), void *arg);

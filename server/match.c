@@ -551,3 +551,137 @@ void explode_bombs(Match *match) {
   }
   pthread_mutex_unlock(&match->mutex);
 }
+
+int should_finish_match_four_opponents(Match *match) {
+    int players_alive = 0;
+    int winning_player = -1;
+
+    for(int i = 0; i < match->players_count; i++) {
+      if(match->player_status[i] == READY_TO_PLAY) {
+        players_alive++;
+        winning_player = i;
+      }
+    }
+
+    if(players_alive > 1) {
+      return NO_WINNER_YET;
+    }
+    
+    if (players_alive == 0) {
+      return ALL_PLAYERS_ARE_DEAD;
+    }
+    
+    return winning_player;
+}
+
+int should_finish_match_two_teams(Match *match) {
+    int team_0_alive = 0;
+    int team_1_alive = 0;
+
+    for(int i = 0; i < match->players_count; i++) {
+      if(match->player_status[i] == READY_TO_PLAY) {
+        assert(match->players_team[i] == 0 || match->players_team[i] == 1);
+        if(match->players_team[i] == 0) {
+          team_0_alive++;
+        } else {
+          team_1_alive++;
+        }
+      }
+    }
+
+    if(team_0_alive == 0 && team_1_alive == 0) {
+      return ALL_PLAYERS_ARE_DEAD;
+    }
+
+    if(team_0_alive == 0 && team_1_alive > 0) return 1;
+    if(team_0_alive > 0 && team_1_alive == 0) return 0;
+
+    return NO_WINNER_YET;
+}
+
+/**
+ * Determines whether the match should finish or not.
+ *
+ * @param match The match object.
+ * @return The winning player or team, depending on the mode, if there is one.
+ *  Otherwise, NO_WINNER_YER or ALL_PLAYERS_ARE_DEAD is returned.
+ */
+int should_finish_match(Match* match) {
+  switch(match->mode) {
+    case FOUR_OPPONENTS_MODE:
+      return should_finish_match_four_opponents(match);
+      break;
+    case TEAM_MODE:
+      return should_finish_match_two_teams(match);
+      break;
+    default:
+      printf("Invalid mode found in should_finish_match");
+      exit(-1);
+      break;
+  }
+};
+
+void free_bombs(Bomb *head) {
+  Bomb *current = head;
+  while (current != NULL) {
+    Bomb *next = current->next;
+    free(current);
+    current = next;
+  }
+}
+
+/**
+ * Finish the match and send the end game message to all players.
+ * Expected to be called within the match updater thread.
+ *
+ * @param match The match to finish.
+ * @param result The result of the match.
+ */
+void finish_match(Match* match, int result) {
+  printf("Finishing match...\n");
+  pthread_mutex_lock(&match->mutex);
+  match->is_match_finished = 1;
+
+  MessageHeader end_game_message;
+
+  if(match->mode == FOUR_OPPONENTS_MODE) {
+    printf("Match has 4 opponents and result is %d\n", result);
+    SET_CODEREQ(&end_game_message, SERVER_RESPONSE_MATCH_END_4_OPPONENTS);
+    SET_ID(&end_game_message, result);
+  } else {
+    printf("Match has two teams and result is %d\n", result);
+    SET_CODEREQ(&end_game_message, SERVER_RESPONSE_MATCH_START_2_TEAMS);
+    SET_EQ(&end_game_message, result);
+  }
+
+  end_game_message.header_line = htons(end_game_message.header_line);
+
+  for(int i = 0; i < match->players_count; i++) {
+    printf("Sending end game message to player %d\n", i);
+    write_loop(match->sockets_tcp[i], &end_game_message, sizeof(end_game_message), 0);
+    pthread_cancel(*match->tcp_player_handler_threads[i]);
+  }
+
+  pthread_cancel(*match->match_handler_thread);
+
+  pthread_mutex_unlock(&match->mutex);
+
+  printf("Waiting for all threads to finish...\n");
+  // TODO need to test if this will work
+  pthread_join(*match->match_handler_thread, NULL);
+  free(match->match_handler_thread);
+
+  for(int i = 0; i < match->players_count; i++) {
+    printf("Waiting for player %d thread to finish...\n", i);
+    pthread_join(*match->tcp_player_handler_threads[i], NULL);
+    free(match->tcp_player_handler_threads[i]);
+    close(match->sockets_tcp[i]);
+  }
+
+  printf("Closing UDP socket and freeing Match structure\n");
+  close(match->socket_udp);
+  free(match->grid);
+  free_bombs(match->bombs_head);
+  pthread_mutex_destroy(&match->mutex);
+  free(match);
+};

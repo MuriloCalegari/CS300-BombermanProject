@@ -68,11 +68,11 @@ int start_match(player pl, int mode) {
         pl.mode = NEW_MATCH_2_TEAMS;
     }
     SET_CODEREQ(&header, pl.mode);
-    header.header_line = htons(header.header_line);
 
     printf("\nStarting match with server. Sending header:\n");
     print_header(&header);
 
+    header.header_line = htons(header.header_line);
     if(send(pl.socket_tcp, &header, sizeof(header), 0) == -1){
         perror("start_match, send");
         return -1;
