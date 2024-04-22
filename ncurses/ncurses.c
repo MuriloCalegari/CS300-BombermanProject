@@ -10,6 +10,7 @@ gameboard* create_board(){
     gameboard* g = malloc(sizeof(gameboard));
     g->b = malloc(sizeof(board));;
     g->lr = malloc(sizeof(line_r));
+    g->lr->nb_line = 0;
     g->lw = malloc(sizeof(line_w));
     g->lw->cursor = 0;
     g->p = malloc(sizeof(pos));

@@ -17,6 +17,7 @@ typedef struct board {
 typedef struct line_r{
     char data[MAX_VERTICAL_LINE][SIZE_MAX_MESSAGE];
     int len[MAX_VERTICAL_LINE];
+    int nb_line;
 } line_r;
 
 typedef struct line_w {

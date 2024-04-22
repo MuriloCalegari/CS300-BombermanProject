@@ -13,6 +13,7 @@
 #include <net/if.h>
 #include "ncurses/ncurses.h"
 #include "client/context.h"
+#include "client/network.h"
 
 int connect_to_server(int port, char* addr){
     //*** create socket ***
@@ -45,18 +46,6 @@ void print_header(MessageHeader* header){
         GET_CODEREQ(header), GET_ID(header), GET_EQ(header));
 }
 
-void convertEndian(uint8_t tab[16]) {
-    uint8_t temp;
-    int i;
-
-    // Swap bytes in array to get little endian
-    for (i = 0; i < 8; ++i) {
-        temp = tab[i];
-        tab[i] = tab[15 - i];
-        tab[15 - i] = temp;
-    }
-}
-
 int start_match(player *pl, int mode) {
     MessageHeader header;
     memset(&header, 0, sizeof(header));
@@ -80,8 +69,12 @@ int start_match(player *pl, int mode) {
     NewMatchMessage resp;
     memset(&resp, 0, sizeof(resp));
 
-    if(recv(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
+    // if(recv(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
+    //     perror("start_match, recv");
+    // }
+    if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
         perror("start_match, recv");
+        return -1;
     }
 
     // codereq check
@@ -97,7 +90,7 @@ int start_match(player *pl, int mode) {
     pl->eq = GET_EQ(&resp.header);
     pl->id = GET_ID(&resp.header);
     memset(&pl->adr_udp, 0, sizeof(pl->adr_udp));
-    memcpy(&pl->adr_udp, &resp.adr_mdiff, sizeof(pl->adr_udp));
+    memcpy(&pl->adr_udp, resp.adr_mdiff, sizeof(pl->adr_udp));
     //convertEndian(pl.adr_udp);
     
     pl->port_multidiff = ntohs(resp.port_mdiff);
@@ -131,7 +124,7 @@ int start_match(player *pl, int mode) {
 
     /* subscribe to the multicast group */
     struct ipv6_mreq group;
-    memcpy(&group.ipv6mr_multiaddr.s6_addr, &pl->adr_udp, sizeof(pl->adr_udp));
+    memcpy(&group.ipv6mr_multiaddr.s6_addr, pl->adr_udp, sizeof(pl->adr_udp));
     group.ipv6mr_interface = 0; //ifindex
 
     if(setsockopt(pl->socket_multidiff, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof group) < 0) {
@@ -152,7 +145,11 @@ int start_match(player *pl, int mode) {
 
     header.header_line = htons(header.header_line);
 
-    if(send(pl->socket_tcp, &header, sizeof(header), 0) == -1){
+    // if(send(pl->socket_tcp, &header, sizeof(header), 0) == -1){
+    //     perror("start_match, send");
+    //     return -1;
+    // }
+    if(write_loop(pl->socket_tcp, &header, sizeof(header), 0) <= 0){
         perror("start_match, send");
         return -1;
     }
@@ -179,7 +176,11 @@ int tchat_message(player *pl, char *data){
     }
     message.data[i+1] = 0;
 
-    if(send(pl->socket_tcp, &message, sizeof(message), 0) == -1){
+    // if(send(pl->socket_tcp, &message, sizeof(message), 0) == -1){
+    //     perror("tchat_message, send");
+    //     return -1;
+    // }
+    if(write_loop(pl->socket_tcp, &message, sizeof(message), 0) <= 0){
         perror("tchat_message, send");
         return -1;
     }
@@ -258,14 +259,43 @@ int game_view(player *pl, gameboard *g){
     return 0;
 }
 
-int read_abonne(int fd, void * dst, int n, int flags){
-    int received = 0;
 
-  while(received != n) {
-    received += recv(fd, dst + received, n - received, flags);
-  }
+void read_tcp_tchat(player *pl, gameboard *g){
+    TChatHeader resp;
+    memset(&resp, 0, sizeof(resp));
 
-  return received;
+    // if(recv(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
+    //     perror("read_tcp, recv");
+    // }
+    if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0)
+        perror("read_tcp, recv");
+
+    char data[SIZE_MAX_MESSAGE];
+    memcpy(&resp.data, data, sizeof(resp.data));
+
+    //update tchat
+    switch(g->lr->nb_line){
+        case 0: 
+            memcpy(&g->lr->data[0], data, sizeof(data));
+            g->lr->nb_line++;
+            break;
+        case 1:
+            memcpy(&g->lr->data[1], data, sizeof(data));
+            g->lr->nb_line++;
+            break;
+        case 2:
+            memcpy(&g->lr->data[2], data, sizeof(data));
+            g->lr->nb_line++;
+            break;
+        default:
+            memset(&g->lr->data[0], 0, SIZE_MAX_MESSAGE); // clear source to get a new data
+            memmove(&g->lr->data[0], g->lr->data[1], sizeof(g->lr->data[0]));
+            memset(&g->lr->data[1], 0, SIZE_MAX_MESSAGE);
+            memmove(&g->lr->data[1], g->lr->data[2], sizeof(g->lr->data[0]));
+            memset(&g->lr->data[2], 0, SIZE_MAX_MESSAGE);
+            memcpy(&g->lr->data[2], data, sizeof(data));
+            break;
+    }   
 }
 
 
@@ -302,15 +332,19 @@ int main(int argc, char** args){
         return 1;
     }
 
+    char test[INET6_ADDRSTRLEN];
+    inet_ntop(AF_INET6, pl->adr_udp, test, INET6_ADDRSTRLEN);
+    printf("%s\n",test);
 
     //tchat(pl);
-    gameboard *g = create_board();
+    //gameboard *g = create_board();
 
-    while(1){
-        game_view(pl, g);
-        game_control(pl, g);
-        //read_abonne(pl.socket_multidiff, );
-    }
+    // while(1){
+    //     game_view(pl, g);
+    //     game_control(pl, g);
+    //     read_tcp_tchat(pl, g);
+    //     //read_abonne(pl.socket_multidiff, );
+    // }
 
     close(pl->socket_tcp);
     close(pl->socket_multidiff);
