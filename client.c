@@ -210,7 +210,7 @@ int udp_message(player *pl, int action){
 
 void *game_control(void *arg){
     player *pl = (player *)arg;
-
+    while(1){
         ACTION a = control(pl->g->lw);
         switch(perform_action(pl->g->b, pl->g->p, a)){
             case -1: // quit
@@ -242,62 +242,71 @@ void *game_control(void *arg){
             // TODO
             default: break;
         }
+    }
+    pthread_exit(NULL);
 }
 
 
 void *read_tcp_tchat(void* arg){
     player *pl = (player *) arg;
-    TChatHeader resp;
-    memset(&resp, 0, sizeof(resp));
 
-    if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0)
-        perror("read_tcp, recv");
+    while(1){
+        TChatHeader resp;
+        memset(&resp, 0, sizeof(resp));
 
-    pthread_mutex_lock(&pl->mutex);
+        if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0)
+            perror("read_tcp, recv");
 
-    char data[SIZE_MAX_MESSAGE];
-    memcpy(&resp.data, data, sizeof(resp.data));
+        pthread_mutex_lock(&pl->mutex);
 
-    //update tchat
-    switch(pl->g->lr->nb_line){
-        case 0: 
-            memcpy(&pl->g->lr->data[0], data, sizeof(data));
-            pl->g->lr->nb_line++;
-            break;
-        case 1:
-            memcpy(&pl->g->lr->data[1], data, sizeof(data));
-            pl->g->lr->nb_line++;
-            break;
-        case 2:
-            memcpy(&pl->g->lr->data[2], data, sizeof(data));
-            pl->g->lr->nb_line++;
-            break;
-        default:
-            memset(&pl->g->lr->data[0], 0, SIZE_MAX_MESSAGE); // clear source to get a new data
-            memmove(&pl->g->lr->data[0], pl->g->lr->data[1], sizeof(pl->g->lr->data[0]));
-            memset(&pl->g->lr->data[1], 0, SIZE_MAX_MESSAGE);
-            memmove(&pl->g->lr->data[1], pl->g->lr->data[2], sizeof(pl->g->lr->data[0]));
-            memset(&pl->g->lr->data[2], 0, SIZE_MAX_MESSAGE);
-            memcpy(&pl->g->lr->data[2], data, sizeof(data));
-            break;
-    }   
-    pthread_mutex_unlock(&pl->mutex);
+        char data[SIZE_MAX_MESSAGE];
+        memcpy(&resp.data, data, sizeof(resp.data));
+
+        //update tchat
+        switch(pl->g->lr->nb_line){
+            case 0: 
+                memcpy(&pl->g->lr->data[0], data, sizeof(data));
+                pl->g->lr->nb_line++;
+                break;
+            case 1:
+                memcpy(&pl->g->lr->data[1], data, sizeof(data));
+                pl->g->lr->nb_line++;
+                break;
+            case 2:
+                memcpy(&pl->g->lr->data[2], data, sizeof(data));
+                pl->g->lr->nb_line++;
+                break;
+            default:
+                memset(&pl->g->lr->data[0], 0, SIZE_MAX_MESSAGE); // clear source to get a new data
+                memmove(&pl->g->lr->data[0], pl->g->lr->data[1], sizeof(pl->g->lr->data[0]));
+                memset(&pl->g->lr->data[1], 0, SIZE_MAX_MESSAGE);
+                memmove(&pl->g->lr->data[1], pl->g->lr->data[2], sizeof(pl->g->lr->data[0]));
+                memset(&pl->g->lr->data[2], 0, SIZE_MAX_MESSAGE);
+                memcpy(&pl->g->lr->data[2], data, sizeof(data));
+                break;
+        }   
+        pthread_mutex_unlock(&pl->mutex);
+    }
+    pthread_exit(NULL);
 }
 
 void *refresh_gameboard(void *arg){ // multicast
     player pl = *(player *) arg;
 
-    MatchFullUpdateHeader head;
-    socklen_t difflen = sizeof(pl.adr_udp);
-    recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
-    int len = head.height * head.width * sizeof(uint8_t);
-    char data[len];
-    recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
-    update_grid(pl.g->b, data);
-    
-    pthread_mutex_lock(&pl.mutex);
-    refresh_game(pl.g->b, pl.g->lw, pl.g->lr);
-    pthread_mutex_unlock(&pl.mutex);
+    while(1){
+        MatchFullUpdateHeader head;
+        socklen_t difflen = sizeof(pl.adr_udp);
+        recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+        int len = head.height * head.width * sizeof(uint8_t);
+        char data[len];
+        recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+        update_grid(pl.g->b, data);
+        
+        pthread_mutex_lock(&pl.mutex);
+        refresh_game(pl.g->b, pl.g->lw, pl.g->lr);
+        pthread_mutex_unlock(&pl.mutex);
+    }
+    pthread_exit(NULL);
 }
 
 

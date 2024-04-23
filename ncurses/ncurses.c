@@ -37,7 +37,6 @@ void free_gameboard(gameboard *g){
     free(g->p);
 }
 
-
 void setup_board(board* board) {
     int lines; int columns;
     getmaxyx(stdscr,lines,columns);
