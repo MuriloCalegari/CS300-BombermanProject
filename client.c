@@ -288,10 +288,11 @@ void *refresh_gameboard(void *arg){ // multicast
     player pl = *(player *) arg;
 
     MatchFullUpdateHeader head;
-    read_loop(pl.socket_multidiff, &head, sizeof(head), 0);
+    socklen_t difflen = sizeof(pl.adr_udp);
+    recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
     int len = head.height * head.width * sizeof(uint8_t);
     char data[len];
-    read_loop(pl.socket_multidiff, &data, sizeof(char)*len, 0);
+    recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
     update_grid(pl.g->b, data);
     
     pthread_mutex_lock(&pl.mutex);
