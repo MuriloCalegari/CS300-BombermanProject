@@ -69,9 +69,6 @@ int start_match(player *pl, int mode) {
     NewMatchMessage resp;
     memset(&resp, 0, sizeof(resp));
 
-    // if(recv(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
-    //     perror("start_match, recv");
-    // }
     if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
         perror("start_match, recv");
         return -1;
@@ -136,19 +133,16 @@ int start_match(player *pl, int mode) {
     /* ready */
     memset(&header, 0, sizeof(MessageHeader));
     if(pl->mode == MODE_NO_TEAM){
-        SET_EQ(&header, CLIENT_READY_TO_PLAY_4_OPPONENTS);
+        SET_CODEREQ(&header, CLIENT_READY_TO_PLAY_4_OPPONENTS);
     }else{
-        SET_EQ(&header, CLIENT_READY_TO_PLAY_2_TEAMS);
+        SET_CODEREQ(&header, CLIENT_READY_TO_PLAY_2_TEAMS);
     }
     SET_ID(&header, pl->id);
     SET_EQ(&header, pl->eq);
 
     header.header_line = htons(header.header_line);
 
-    // if(send(pl->socket_tcp, &header, sizeof(header), 0) == -1){
-    //     perror("start_match, send");
-    //     return -1;
-    // }
+
     if(write_loop(pl->socket_tcp, &header, sizeof(header), 0) <= 0){
         perror("start_match, send");
         return -1;
@@ -176,10 +170,6 @@ int tchat_message(player *pl, char *data){
     }
     message.data[i+1] = 0;
 
-    // if(send(pl->socket_tcp, &message, sizeof(message), 0) == -1){
-    //     perror("tchat_message, send");
-    //     return -1;
-    // }
     if(write_loop(pl->socket_tcp, &message, sizeof(message), 0) <= 0){
         perror("tchat_message, send");
         return -1;
@@ -218,20 +208,22 @@ int udp_message(player *pl, int action){
     return 0;
 }
 
-int game_control(player *pl, gameboard *g){
-        ACTION a = control(g->lw);
-        switch(perform_action(g->b, g->p, a)){
+void *game_control(void *arg){
+    player *pl = (player *)arg;
+
+        ACTION a = control(pl->g->lw);
+        switch(perform_action(pl->g->b, pl->g->p, a)){
             case -1: // quit
-                free_board(g->b);
+                free_board(pl->g->b);
                 curs_set(1); // Set the cursor to visible again
                 endwin(); /* End curses mode */
-                free_gameboard(g);
-                return 1;
+                free_gameboard(pl->g);
+                break;
             case 1:
-                if(g->lw->cursor > 0){
-                    tchat_message(pl, g->lw->data);
-                    g->lw->cursor=0;
-                    memset(g->lw->data, 0, SIZE_MAX_MESSAGE);
+                if(pl->g->lw->cursor > 0){
+                    tchat_message(pl, pl->g->lw->data);
+                    pl->g->lw->cursor=0;
+                    memset(pl->g->lw->data, 0, SIZE_MAX_MESSAGE);
                 }
                 break;
             case 2: //left
@@ -250,58 +242,68 @@ int game_control(player *pl, gameboard *g){
             // TODO
             default: break;
         }
-    return 0;
-}
-
-int game_view(player *pl, gameboard *g){
-    refresh_game(g->b, g->lw, g->lr);
-    usleep(30*1000);
-    return 0;
 }
 
 
-void read_tcp_tchat(player *pl, gameboard *g){
+void *read_tcp_tchat(void* arg){
+    player *pl = (player *) arg;
     TChatHeader resp;
     memset(&resp, 0, sizeof(resp));
 
-    // if(recv(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
-    //     perror("read_tcp, recv");
-    // }
     if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0)
         perror("read_tcp, recv");
+
+    pthread_mutex_lock(&pl->mutex);
 
     char data[SIZE_MAX_MESSAGE];
     memcpy(&resp.data, data, sizeof(resp.data));
 
     //update tchat
-    switch(g->lr->nb_line){
+    switch(pl->g->lr->nb_line){
         case 0: 
-            memcpy(&g->lr->data[0], data, sizeof(data));
-            g->lr->nb_line++;
+            memcpy(&pl->g->lr->data[0], data, sizeof(data));
+            pl->g->lr->nb_line++;
             break;
         case 1:
-            memcpy(&g->lr->data[1], data, sizeof(data));
-            g->lr->nb_line++;
+            memcpy(&pl->g->lr->data[1], data, sizeof(data));
+            pl->g->lr->nb_line++;
             break;
         case 2:
-            memcpy(&g->lr->data[2], data, sizeof(data));
-            g->lr->nb_line++;
+            memcpy(&pl->g->lr->data[2], data, sizeof(data));
+            pl->g->lr->nb_line++;
             break;
         default:
-            memset(&g->lr->data[0], 0, SIZE_MAX_MESSAGE); // clear source to get a new data
-            memmove(&g->lr->data[0], g->lr->data[1], sizeof(g->lr->data[0]));
-            memset(&g->lr->data[1], 0, SIZE_MAX_MESSAGE);
-            memmove(&g->lr->data[1], g->lr->data[2], sizeof(g->lr->data[0]));
-            memset(&g->lr->data[2], 0, SIZE_MAX_MESSAGE);
-            memcpy(&g->lr->data[2], data, sizeof(data));
+            memset(&pl->g->lr->data[0], 0, SIZE_MAX_MESSAGE); // clear source to get a new data
+            memmove(&pl->g->lr->data[0], pl->g->lr->data[1], sizeof(pl->g->lr->data[0]));
+            memset(&pl->g->lr->data[1], 0, SIZE_MAX_MESSAGE);
+            memmove(&pl->g->lr->data[1], pl->g->lr->data[2], sizeof(pl->g->lr->data[0]));
+            memset(&pl->g->lr->data[2], 0, SIZE_MAX_MESSAGE);
+            memcpy(&pl->g->lr->data[2], data, sizeof(data));
             break;
     }   
+    pthread_mutex_unlock(&pl->mutex);
+}
+
+void *refresh_gameboard(void *arg){ // multicast
+    player pl = *(player *) arg;
+
+    MatchFullUpdateHeader head;
+    read_loop(pl.socket_multidiff, &head, sizeof(head), 0);
+    int len = head.height * head.width * sizeof(uint8_t);
+    char data[len];
+    read_loop(pl.socket_multidiff, &data, sizeof(char)*len, 0);
+    update_grid(pl.g->b, data);
+    
+    pthread_mutex_lock(&pl.mutex);
+    refresh_game(pl.g->b, pl.g->lw, pl.g->lr);
+    pthread_mutex_unlock(&pl.mutex);
 }
 
 
 int main(int argc, char** args){
     player *pl = malloc(sizeof(player));
-    pl->num = 0;
+    pl->num = 0; // number of action
+    pthread_mutex_init(&pl->mutex, 0);
 
     if(argc != 4){
         printf("usage: %s <port> <address> <1:no team, 2:2team>\n", args[0]);
@@ -336,15 +338,28 @@ int main(int argc, char** args){
     inet_ntop(AF_INET6, pl->adr_udp, test, INET6_ADDRSTRLEN);
     printf("%s\n",test);
 
-    //tchat(pl);
-    //gameboard *g = create_board();
+    pthread_t thread_tchat_read;
+    pthread_t refresh_party;
+    pthread_t action;
 
-    // while(1){
-    //     game_view(pl, g);
-    //     game_control(pl, g);
-    //     read_tcp_tchat(pl, g);
-    //     //read_abonne(pl.socket_multidiff, );
-    // }
+    pl->g = create_board();
+
+    if(pthread_create(&refresh_party, NULL, refresh_gameboard, pl)){
+        perror("thread refresh party");
+        return 1;
+    }
+    if(pthread_create(&read_tcp_tchat, NULL, thread_tchat_read, pl)){
+        perror("thread read tchat");
+        return 1;
+    }
+    if(pthread_create(&game_control, NULL, action, pl)){
+        perror("action thread");
+        return 1;
+    }
+
+    pthread_join(thread_tchat_read, NULL);
+    pthread_join(refresh_party, NULL);
+    pthread_join(action, NULL);
 
     close(pl->socket_tcp);
     close(pl->socket_multidiff);

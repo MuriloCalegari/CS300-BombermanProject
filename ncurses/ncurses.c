@@ -59,6 +59,14 @@ void set_grid(board* b, int x, int y, int v) {
     b->grid[y*b->w + x] = v;
 }
 
+void update_grid(board* b, char *up){
+    for(int h=0; h < b->h; h++){
+        for(int w=0; w < b->w; w++){
+            set_grid(b, w, h, up[w+h]);
+        }
+    }
+}
+
 void refresh_game(board* b, line_w* lw, line_r* lr) {
     // Update grid
     int x,y;
@@ -66,11 +74,32 @@ void refresh_game(board* b, line_w* lw, line_r* lr) {
         for (x = 0; x < b->w; x++) {
             char c;
             switch (get_grid(b,x,y)) {
-                case 0:
+                case EMPTY_CELL:
                     c = ' ';
                     break;
-                case 1:
-                    c = 'O';
+                case INDESTRUCTIBLE_WALL:
+                    c = '#';
+                    break;
+                case DESTRUCTIBLE_WALL:
+                    c = '+';
+                    break;
+                case BOMB:
+                    c = '*';
+                    break;
+                case EXPLODED_BY_BOMB:
+                    c = 'X';
+                    break;
+                case 5: // joueur 1
+                    c = '1';
+                    break;
+                case 6: // joueur 2
+                    c = '2';
+                    break;
+                case 7: // joueur 3
+                    c = '3';
+                    break;
+                case 8: // joueur 4
+                    c = '4';
                     break;
                 default:
                     c = '?';
@@ -165,9 +194,9 @@ int perform_action(board* b, pos* p, ACTION a) {
             return -1;
         default: break;
     }
-    p->x += xd; p->y += yd;
-    p->x = (p->x + b->w)%b->w;
-    p->y = (p->y + b->h)%b->h;
-    set_grid(b,p->x,p->y,1);
+    // p->x += xd; p->y += yd;
+    // p->x = (p->x + b->w)%b->w;
+    // p->y = (p->y + b->h)%b->h;
+    // set_grid(b,p->x,p->y,1);
     return res;
 }
