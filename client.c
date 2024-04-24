@@ -350,7 +350,7 @@ int main(int argc, char** args){
     inet_ntop(AF_INET6, pl->adr_udp, test, INET6_ADDRSTRLEN);
     printf("%s\n",test);
 
-    /*pthread_t thread_tchat_read;
+    pthread_t thread_tchat_read;
     pthread_t refresh_party;
     pthread_t action;
 
@@ -360,11 +360,11 @@ int main(int argc, char** args){
         perror("thread refresh party");
         return 1;
     }
-    if(pthread_create(&read_tcp_tchat, NULL, thread_tchat_read, pl)){
+    if(pthread_create(&thread_tchat_read, NULL, read_tcp_tchat, pl)){
         perror("thread read tchat");
         return 1;
     }
-    if(pthread_create(&game_control, NULL, action, pl)){
+    if(pthread_create(&action, NULL, game_control, pl)){
         perror("action thread");
         return 1;
     }
@@ -372,7 +372,7 @@ int main(int argc, char** args){
     pthread_join(thread_tchat_read, NULL);
     pthread_join(refresh_party, NULL);
     pthread_join(action, NULL);
-*/
+
     close(pl->socket_tcp);
     close(pl->socket_multidiff);
     close(pl->socket_udp);
