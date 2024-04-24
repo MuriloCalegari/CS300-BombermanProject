@@ -36,7 +36,7 @@ void *match_updater_thread_handler(void *arg);
 */
 
 int main(int argc, char** args) {
-  if (argc < 2) {
+  if (argc != 3) {
     fprintf(stderr, "Usage: %s <tcp_port> <freq>\n", args[0]);
     exit(1);
   }
@@ -148,6 +148,7 @@ void send_new_match_info_message(Match *match, int player_index, int mode) {
 
   SET_ID(&message.header, match->players[player_index]);
   SET_EQ(&message.header, match->players_team[player_index]);
+  message.header.header_line = htons(message.header.header_line);
 
   message.port_udp = htons(match->udp_server_port);
   message.port_mdiff = htons(match->multicast_port);
@@ -214,6 +215,40 @@ void clean_arg(void *arg) {
   free(arg);
 }
 
+void send_message(Match *match, int player_index, int mode){
+  // get_message
+  TChatHeader msg;
+  uint8_t len;
+  read_loop(match->sockets_tcp[player_index], &len, sizeof(uint8_t), 0);
+  uint8_t data[len];
+  read_loop(match->sockets_tcp[player_index], data, len, 0);
+
+  if(mode == T_CHAT_ALL_PLAYERS){
+    // TODO FIX This will break the loop before intended
+    for(int i=0; (i<match->players_count) && (i!=player_index); i++){
+      SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_ALL_PLAYERS);
+      SET_ID(&msg.header, match->players[player_index]);
+      msg.header.header_line = htons(msg.header.header_line);
+      msg.data_len = len;
+      memcpy(&msg, data, len);
+
+      write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
+    }
+  }else {
+    // TODO FIX This will break the loop before intended
+    for(int i=0; (i<match->players_count) && (i!=player_index) && (match->players_team[i]==match->players_team[player_index]); i++){
+      SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_TEAM);
+      SET_ID(&msg.header, match->players[player_index]);
+      SET_EQ(&msg.header, match->players_team[player_index]);
+      msg.header.header_line = htons(msg.header.header_line);
+      msg.data_len = len;
+      memcpy(&msg, data, len);
+
+      write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
+    }
+  }
+}
+
 void *tcp_player_handler(void *arg) {
   PlayerHandlerThreadContext *context = (PlayerHandlerThreadContext *) arg;
   Match *match = context->match;
@@ -226,6 +261,7 @@ void *tcp_player_handler(void *arg) {
   while(1) {
     MessageHeader message_header;
     read_loop(match->sockets_tcp[player_index], &message_header, sizeof(MessageHeader), 0);
+    message_header.header_line = ntohs(message_header.header_line);
 
     switch(GET_CODEREQ(&(message_header))) {
       case CLIENT_READY_TO_PLAY_4_OPPONENTS:
@@ -238,6 +274,16 @@ void *tcp_player_handler(void *arg) {
           start_match(match);
         }
         pthread_mutex_unlock(&match->mutex);
+        break;
+      case T_CHAT_ALL_PLAYERS:
+//        pthread_mutex_lock(&match->mutex); TODO DELETE
+        send_message(match, player_index, T_CHAT_ALL_PLAYERS);
+//        pthread_mutex_unlock(&match->mutex); TODO DELETE
+        break;
+      case T_CHAT_TEAM:
+//        pthread_mutex_lock(&match->mutex); TODO DELETE
+        send_message(match, player_index, T_CHAT_ALL_PLAYERS);
+//        pthread_mutex_unlock(&match->mutex); TODO DELETE
         break;
     }
   }
@@ -293,7 +339,7 @@ void *match_updater_thread_handler(void *arg) {
       explode_bombs(match);
       send_full_grid_to_all_players(match);
     } else {
-      finish_match(match, result);  
+      finish_match(match, result);
       break;
     }
   }

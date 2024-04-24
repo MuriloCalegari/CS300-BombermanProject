@@ -11,22 +11,9 @@
 #include <ncurses.h>
 #include <string.h>
 #include <net/if.h>
-#include "common/messages.h"
 #include "ncurses/ncurses.h"
 #include "client/context.h"
-
-int modulo_2_13(int n);
-
-typedef struct player {
-    int socket_tcp;
-    int socket_udp;
-    int id;
-    int eq;
-    int num;
-    int mode;
-    uint8_t adr_udp[16];
-    int port_udp;
-} player;
+#include "client/network.h"
 
 int connect_to_server(int port, char* addr){
     //*** create socket ***
@@ -59,21 +46,21 @@ void print_header(MessageHeader* header){
         GET_CODEREQ(header), GET_ID(header), GET_EQ(header));
 }
 
-int start_match(player pl, int mode) {
+int start_match(player *pl, int mode) {
     MessageHeader header;
     memset(&header, 0, sizeof(header));
     if(mode == 1){
-        pl.mode = NEW_MATCH_4_OPPONENTS;
+        pl->mode = NEW_MATCH_4_OPPONENTS;
     }else{
-        pl.mode = NEW_MATCH_2_TEAMS;
+        pl->mode = NEW_MATCH_2_TEAMS;
     }
-    SET_CODEREQ(&header, pl.mode);
+    SET_CODEREQ(&header, pl->mode);
+    header.header_line = htons(header.header_line);
 
     printf("\nStarting match with server. Sending header:\n");
     print_header(&header);
 
-    header.header_line = htons(header.header_line);
-    if(send(pl.socket_tcp, &header, sizeof(header), 0) == -1){
+    if(send(pl->socket_tcp, &header, sizeof(header), 0) == -1){
         perror("start_match, send");
         return -1;
     }
@@ -82,27 +69,35 @@ int start_match(player pl, int mode) {
     NewMatchMessage resp;
     memset(&resp, 0, sizeof(resp));
 
-    if(recv(pl.socket_tcp, &resp, sizeof(resp), 0) <= 0){
+    if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
         perror("start_match, recv");
+        return -1;
     }
+
     // codereq check
+    resp.header.header_line = ntohs(resp.header.header_line); // convert
+    int test = GET_CODEREQ(&resp.header);
+    printf("codereq %d\n", test);
     if(((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_4_OPPONENTS && mode == MODE_NO_TEAM) ||
     ((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_2_TEAMS && mode == MODE_2_TEAM)) {
         perror("start_match, error recv codereq");
         return -1;
     }
 
-    pl.eq = GET_EQ(&resp.header);
-    pl.id = GET_ID(&resp.header);
+    pl->eq = GET_EQ(&resp.header);
+    pl->id = GET_ID(&resp.header);
+    memset(&pl->adr_udp, 0, sizeof(pl->adr_udp));
+    memcpy(&pl->adr_udp, resp.adr_mdiff, sizeof(pl->adr_udp));
+    //convertEndian(pl.adr_udp);
 
-    memcpy(&pl.adr_udp, resp.adr_mdiff, sizeof(resp.adr_mdiff));
-    pl.port_udp = resp.port_mdiff;
+    pl->port_multidiff = ntohs(resp.port_mdiff);
+    pl->port_udp = ntohs(resp.port_udp);
 
     //config sock_abonnement
     int ok = 1;
-    if(setsockopt(pl.socket_udp, SOL_SOCKET, SO_REUSEADDR, &ok, sizeof(ok)) < 0) {
+    if(setsockopt(pl->socket_multidiff, SOL_SOCKET, SO_REUSEADDR, &ok, sizeof(ok)) < 0) {
         perror("echec de SO_REUSEADDR");
-        close(pl.socket_udp);
+        close(pl->socket_udp);
         return 1;
     }
 
@@ -110,43 +105,45 @@ int start_match(player pl, int mode) {
     struct sockaddr_in6 adr;
     memset(&adr, 0, sizeof(adr));
     adr.sin6_family = AF_INET6;
+    //memcpy(&adr.sin6_addr, &pl.adr_udp, sizeof(pl.adr_udp));
     adr.sin6_addr = in6addr_any;
-    adr.sin6_port = htons(resp.port_udp);
+    adr.sin6_port = pl->port_multidiff;
 
-    if(bind(pl.socket_udp, (struct sockaddr*) &adr, sizeof(adr))) {
+    if(bind(pl->socket_multidiff, (struct sockaddr*) &adr, sizeof(adr))) {
         perror("echec de bind");
-        close(pl.socket_udp);
+        close(pl->socket_udp);
         return 1;
     }
 
-    int ifindex = if_nametoindex ("eth0");
-    if(ifindex == 0)
-        perror("if_nametoindex");
+    // int ifindex = if_nametoindex ("eth0");
+    // if(ifindex == 0)
+    //     perror("if_nametoindex");
 
     /* subscribe to the multicast group */
     struct ipv6_mreq group;
-    memcpy(&group.ipv6mr_multiaddr.s6_addr, resp.adr_mdiff, sizeof(resp.adr_mdiff));
-    group.ipv6mr_interface = ifindex;
+    memcpy(&group.ipv6mr_multiaddr.s6_addr, pl->adr_udp, sizeof(pl->adr_udp));
+    group.ipv6mr_interface = 0; //ifindex
 
-    if(setsockopt(pl.socket_udp, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof group) < 0) {
+    if(setsockopt(pl->socket_multidiff, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof group) < 0) {
         perror("echec de abonnement groupe");
-        close(pl.socket_udp);
+        close(pl->socket_udp);
         return 1;
     }
 
     /* ready */
     memset(&header, 0, sizeof(MessageHeader));
-    if(pl.mode == MODE_NO_TEAM){
-        SET_EQ(&header, CLIENT_READY_TO_PLAY_4_OPPONENTS);
+    if(pl->mode == MODE_NO_TEAM){
+        SET_CODEREQ(&header, CLIENT_READY_TO_PLAY_4_OPPONENTS);
     }else{
-        SET_EQ(&header, CLIENT_READY_TO_PLAY_2_TEAMS);
+        SET_CODEREQ(&header, CLIENT_READY_TO_PLAY_2_TEAMS);
     }
-    SET_ID(&header, pl.id);
-    SET_EQ(&header, pl.eq);
+    SET_ID(&header, pl->id);
+    SET_EQ(&header, pl->eq);
 
     header.header_line = htons(header.header_line);
 
-    if(send(pl.socket_tcp, &header, sizeof(header), 0) == -1){
+
+    if(write_loop(pl->socket_tcp, &header, sizeof(header), 0) <= 0){
         perror("start_match, send");
         return -1;
     }
@@ -154,40 +151,46 @@ int start_match(player pl, int mode) {
     return 0;
 }
 
-int tchat_message(player pl, char *data){
+int tchat_message(player *pl, char *data){
     TChatHeader message;
+    memset(&message, 0, sizeof(message));
 
     if(strcmp(&data[0],"/") == 0 && strcmp(&data[0],"t") == 0 ) { // start message with "/t" for team tchat
         SET_CODEREQ(&message.header, T_CHAT_TEAM);
     }else{
         SET_CODEREQ(&message.header, T_CHAT_ALL_PLAYERS);
     }
-    SET_ID(&message.header, pl.id);
-    SET_EQ(&message.header, pl.eq);
+    SET_ID(&message.header, pl->id);
+    SET_EQ(&message.header, pl->eq);
     message.header.header_line = htons(message.header.header_line);
 
     message.data_len = strlen(data);
-//    message.data = data; TODO FIX
+    int i;
+    for(i=0; i<message.data_len-1; i++){
+        message.data[i] = data[i];
+    }
+    message.data[i+1] = 0;
 
-    if(send(pl.socket_tcp, &message, sizeof(message), 0) == -1){
+    if(write_loop(pl->socket_tcp, &message, sizeof(message), 0) <= 0){
         perror("tchat_message, send");
         return -1;
     }
     return 0;
 }
 
-int udp_message(player pl, int action){
+int udp_message(player *pl, int action){
 
     ActionMessage buffer;
-    if(pl.mode == MODE_NO_TEAM){
+    memset(&buffer, 0, sizeof(buffer));
+    if(pl->mode == MODE_NO_TEAM){
         SET_CODEREQ(&buffer.message_header, ACTION_MESSAGE_4_OPPONENTS);
     }else{
         SET_CODEREQ(&buffer.message_header, ACTION_MESSAGE_2_TEAMS);
     }
-    SET_EQ(&buffer.message_header, pl.eq);
-    SET_ID(&buffer.message_header, pl.id);
-    SET_NUM(&buffer, modulo_2_13(pl.num));
-    pl.num = pl.num+1;
+    SET_EQ(&buffer.message_header, pl->eq);
+    SET_ID(&buffer.message_header, pl->id);
+    SET_NUM(&buffer, (pl->num % NUM_MAX));
+    pl->num = pl->num+1;
     SET_ACTION(&buffer, action);
 
     buffer.message_header.header_line = htons(buffer.message_header.header_line);
@@ -195,10 +198,10 @@ int udp_message(player pl, int action){
     struct sockaddr_in6 adr;
     memset(&adr, 0, sizeof(adr));
     adr.sin6_family = AF_INET6;
-    memcpy(&adr.sin6_addr, pl.adr_udp, sizeof(pl.adr_udp));
-    adr.sin6_port = pl.port_udp;
+    memcpy(&adr.sin6_addr, pl->adr_udp, sizeof(pl->adr_udp));
+    adr.sin6_port = pl->port_udp;
 
-    int send = sendto(pl.socket_udp, &buffer, sizeof(buffer), 0, (struct sockaddr *)&adr, sizeof(adr));
+    int send = sendto(pl->socket_udp, &buffer, sizeof(buffer), 0, (struct sockaddr *)&adr, sizeof(adr));
     if(send < 0){
         perror("sendto fail");
         return -1;
@@ -207,75 +210,112 @@ int udp_message(player pl, int action){
     return 0;
 }
 
-int tchat(player pl){
-    board* b = malloc(sizeof(board));;
-    line_r* lr = malloc(sizeof(line_r));
-    line_w* lw = malloc(sizeof(line_w));
-    lw->cursor = 0;
-    pos* p = malloc(sizeof(pos));
-    p->x = 0; p->y = 0;
-
-    // NOTE: All ncurses operations (getch, mvaddch, refresh, etc.) must be done on the same thread.
-    initscr(); /* Start curses mode */
-    raw(); /* Disable line buffering */
-    intrflush(stdscr, FALSE); /* No need to flush when intr key is pressed */
-    keypad(stdscr, TRUE); /* Required in order to get events from keyboard */
-    nodelay(stdscr, TRUE); /* Make getch non-blocking */
-    noecho(); /* Don't echo() while we do getch (we will manually print characters when relevant) */
-    curs_set(0); // Set the cursor to invisible
-    start_color(); // Enable colors
-    init_pair(1, COLOR_YELLOW, COLOR_BLACK); // Define a new color style (text is yellow, background is black)
-
-    setup_board(b);
-    while (true) {
-        ACTION a = control(lw);
-        switch(perform_action(b, p, a)){
+void *game_control(void *arg){
+    player *pl = (player *)arg;
+    while(1){
+        ACTION a = control(pl->g->lw);
+        switch(perform_action(pl->g->b, pl->g->p, a)){
             case -1: // quit
-                free_board(b);
+                free_board(pl->g->b);
                 curs_set(1); // Set the cursor to visible again
                 endwin(); /* End curses mode */
-                free(p); free(lw); free(lr); free(b);
-                return 1;
+                free_gameboard(pl->g);
+                break;
             case 1:
-                if(lw->cursor > 0){
-                    tchat_message(pl, lw->data);
-                    lw->cursor=0;
-                    memset(lw->data, 0, TEXT_SIZE);
+                if(pl->g->lw->cursor > 0){
+                    tchat_message(pl, pl->g->lw->data);
+                    pl->g->lw->cursor=0;
+                    memset(pl->g->lw->data, 0, SIZE_MAX_MESSAGE);
                 }
                 break;
             case 2: //left
-                udp_message(pl, 3);
+                udp_message(pl, MOVE_WEST);
                 break;
             case 3: //right
-                udp_message(pl, 1);
+                udp_message(pl, MOVE_EAST);
                 break;
             case 4: //up
-                udp_message(pl, 0);
+                udp_message(pl, MOVE_NORTH);
                 break;
             case 5: //down
-                udp_message(pl, 2);
+                udp_message(pl, MOVE_SOUTH);
                 break;
             case 6: //bomb
             // TODO
             default: break;
         }
-        refresh_game(b, lw, lr);
-        usleep(30*1000);
     }
-    free_board(b);
+    pthread_exit(NULL);
+}
 
-    curs_set(1); // Set the cursor to visible again
-    endwin(); /* End curses mode */
 
-    free(p); free(lw); free(lr); free(b);
+void *read_tcp_tchat(void* arg){
+    player *pl = (player *) arg;
 
-    return 0;
+    while(1){
+        TChatHeader resp;
+        memset(&resp, 0, sizeof(resp));
+
+        if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0)
+            perror("read_tcp, recv");
+
+        pthread_mutex_lock(&pl->mutex);
+
+        char data[SIZE_MAX_MESSAGE];
+        memcpy(&resp.data, data, sizeof(resp.data));
+
+        //update tchat
+        switch(pl->g->lr->nb_line){
+            case 0:
+                memcpy(&pl->g->lr->data[0], data, sizeof(data));
+                pl->g->lr->nb_line++;
+                break;
+            case 1:
+                memcpy(&pl->g->lr->data[1], data, sizeof(data));
+                pl->g->lr->nb_line++;
+                break;
+            case 2:
+                memcpy(&pl->g->lr->data[2], data, sizeof(data));
+                pl->g->lr->nb_line++;
+                break;
+            default:
+                memset(&pl->g->lr->data[0], 0, SIZE_MAX_MESSAGE); // clear source to get a new data
+                memmove(&pl->g->lr->data[0], pl->g->lr->data[1], sizeof(pl->g->lr->data[0]));
+                memset(&pl->g->lr->data[1], 0, SIZE_MAX_MESSAGE);
+                memmove(&pl->g->lr->data[1], pl->g->lr->data[2], sizeof(pl->g->lr->data[0]));
+                memset(&pl->g->lr->data[2], 0, SIZE_MAX_MESSAGE);
+                memcpy(&pl->g->lr->data[2], data, sizeof(data));
+                break;
+        }
+        pthread_mutex_unlock(&pl->mutex);
+    }
+    pthread_exit(NULL);
+}
+
+void *refresh_gameboard(void *arg){ // multicast
+    player pl = *(player *) arg;
+
+    while(1){
+        MatchFullUpdateHeader head;
+        socklen_t difflen = sizeof(pl.adr_udp);
+        recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+        int len = head.height * head.width * sizeof(uint8_t);
+        char data[len];
+        recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+        update_grid(pl.g->b, data);
+
+        pthread_mutex_lock(&pl.mutex);
+        refresh_game(pl.g->b, pl.g->lw, pl.g->lr);
+        pthread_mutex_unlock(&pl.mutex);
+    }
+    pthread_exit(NULL);
 }
 
 
 int main(int argc, char** args){
-    player pl;
-    pl.num = 0;
+    player *pl = malloc(sizeof(player));
+    pl->num = 0; // number of action
+    pthread_mutex_init(&pl->mutex, 0);
 
     if(argc != 4){
         printf("usage: %s <port> <address> <1:no team, 2:2team>\n", args[0]);
@@ -284,16 +324,20 @@ int main(int argc, char** args){
 
     int port = atoi(args[1]);
     char* addr = args[2];
-
-    if((pl.socket_tcp = connect_to_server(port, addr)) < 0){
+    if((pl->socket_tcp = connect_to_server(port, addr)) < 0){
         printf("Connecting to server failed. Exiting...");
         return 1;
     }
 
     printf("connection successful\n");
 
-    if((pl.socket_udp = socket(AF_INET6, SOCK_DGRAM, 0)) < 0){
+    if((pl->socket_multidiff = socket(AF_INET6, SOCK_DGRAM, 0)) < 0){
         perror("socket abonnement");
+        return 1;
+    }
+
+    if((pl->socket_udp = socket(AF_INET6, SOCK_DGRAM, 0)) < 0){
+        perror("socket udp");
         return 1;
     }
 
@@ -302,16 +346,37 @@ int main(int argc, char** args){
         return 1;
     }
 
-    tchat(pl);
+    char test[INET6_ADDRSTRLEN];
+    inet_ntop(AF_INET6, pl->adr_udp, test, INET6_ADDRSTRLEN);
+    printf("%s\n",test);
 
-    close(pl.socket_tcp);
+    pthread_t thread_tchat_read;
+    pthread_t refresh_party;
+    pthread_t action;
+
+    pl->g = create_board();
+
+    if(pthread_create(&refresh_party, NULL, refresh_gameboard, pl)){
+        perror("thread refresh party");
+        return 1;
+    }
+    if(pthread_create(&thread_tchat_read, NULL, read_tcp_tchat, pl)){
+        perror("thread read tchat");
+        return 1;
+    }
+    if(pthread_create(&action, NULL, game_control, pl)){
+        perror("action thread");
+        return 1;
+    }
+
+    pthread_join(thread_tchat_read, NULL);
+    pthread_join(refresh_party, NULL);
+    pthread_join(action, NULL);
+
+    close(pl->socket_tcp);
+    close(pl->socket_multidiff);
+    close(pl->socket_udp);
+    free(pl);
 
     return 0;
-}
-
-int modulo_2_13(int n) {
-    while (n >= (1 << 13)) {
-        n -= (1 << 13);
-    }
-    return n;
 }

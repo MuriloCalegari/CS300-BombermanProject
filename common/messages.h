@@ -55,6 +55,7 @@ typedef struct ActionMessage {
 #define MOVE_WEST 3
 #define DROP_BOMB 4
 #define CANCEL_LATEST_MOVE 5
+#define TCHAT_MESSAGE 6
 
 #define SET_NUM(message, num) \
     (message)->action_identifier = ((message)->action_identifier & 0xE000) | num
@@ -77,9 +78,12 @@ typedef struct ActionMessage {
 +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 */
 
+#define SIZE_MAX_MESSAGE 150
+
 typedef struct TChatHeader {
     MessageHeader header;
     uint8_t data_len;
+    uint8_t data[SIZE_MAX_MESSAGE];
 } TChatHeader;
 
 
