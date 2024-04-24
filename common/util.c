@@ -31,7 +31,14 @@ int write_loop(int fd, void * src, int n, int flags) {
   int sent = 0;
 
   while(sent != n) {
-    sent += send(fd, src + sent, n - sent, flags);
+    int just_sent = send(fd, src + sent, n - sent, flags);
+
+    if (just_sent == -1) {
+      perror("send");
+      return -1;
+    }
+
+    sent += just_sent;
   }
 
   return sent;

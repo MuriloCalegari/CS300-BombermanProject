@@ -15,6 +15,8 @@
 #include "client/context.h"
 #include "client/network.h"
 
+char* addr;
+
 int connect_to_server(int port, char* addr){
     //*** create socket ***
     int sockfd = socket(PF_INET6, SOCK_STREAM, 0);
@@ -69,6 +71,7 @@ int start_match(player *pl, int mode) {
     NewMatchMessage resp;
     memset(&resp, 0, sizeof(resp));
 
+    printf("Waiting for server response...\n");
     if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
         perror("start_match, recv");
         return -1;
@@ -109,25 +112,39 @@ int start_match(player *pl, int mode) {
     adr.sin6_addr = in6addr_any;
     adr.sin6_port = pl->port_multidiff;
 
+    printf("Binding UDP socket to port %d\n", pl->port_multidiff);
     if(bind(pl->socket_multidiff, (struct sockaddr*) &adr, sizeof(adr))) {
         perror("echec de bind");
         close(pl->socket_udp);
         return 1;
     }
 
-    // int ifindex = if_nametoindex ("eth0");
-    // if(ifindex == 0)
-    //     perror("if_nametoindex");
+    // If address equals localhost and this is a mac then...
+    
+    int ifindex = -1;
+    
+    if(strcmp(addr, "localhost") == 0)  {
+        #ifdef TARGET_OS_OSX
+        printf("Running on MacOS with localhost, using if_nametoindex for loopback interface\n");
+        ifindex = if_nametoindex ("lo0");
+        if(ifindex == 0)
+            perror("if_nametoindex");
+        #endif
+
+    }
 
     /* subscribe to the multicast group */
     struct ipv6_mreq group;
     memcpy(&group.ipv6mr_multiaddr.s6_addr, pl->adr_udp, sizeof(pl->adr_udp));
-    group.ipv6mr_interface = 0; //ifindex
+    if(ifindex == -1)
+        group.ipv6mr_interface = 0; // all interfaces
+    else
+        group.ipv6mr_interface = ifindex; // override
 
     // Use inet_ntop to convert the address to a human-readable string
     char addr_str[INET6_ADDRSTRLEN];
     inet_ntop(AF_INET6, &group.ipv6mr_multiaddr, addr_str, INET6_ADDRSTRLEN);
-    printf("Multicast group address: %s\n", addr_str);
+    printf("Joining multicast group address: %s\n", addr_str);
 
     if(setsockopt(pl->socket_multidiff, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof group) < 0) {
         perror("echec de abonnement groupe");
@@ -147,7 +164,6 @@ int start_match(player *pl, int mode) {
 
     header.header_line = htons(header.header_line);
 
-    printf("Ici!!\n");
     if(write_loop(pl->socket_tcp, &header, sizeof(header), 0) <= 0){
         perror("start_match, send");
         return -1;
@@ -328,7 +344,7 @@ int main(int argc, char** args){
     }
 
     int port = atoi(args[1]);
-    char* addr = args[2];
+    addr = args[2];
     if((pl->socket_tcp = connect_to_server(port, addr)) < 0){
         printf("Connecting to server failed. Exiting...");
         return 1;
@@ -351,10 +367,6 @@ int main(int argc, char** args){
         return 1;
     }
 
-    char test[INET6_ADDRSTRLEN];
-    inet_ntop(AF_INET6, pl->adr_udp, test, INET6_ADDRSTRLEN);
-    printf("%s\n",test);
-
     pthread_t thread_tchat_read;
     pthread_t refresh_party;
     pthread_t action;
@@ -369,14 +381,15 @@ int main(int argc, char** args){
         perror("thread read tchat");
         return 1;
     }
-    if(pthread_create(&action, NULL, game_control, pl)){
-        perror("action thread");
-        return 1;
-    }
+    // if(pthread_create(&action, NULL, game_control, pl)){
+    //     perror("action thread");
+    //     return 1;
+    // }
 
+    printf("MAIN: Waiting on all threads to finish...");
     pthread_join(thread_tchat_read, NULL);
     pthread_join(refresh_party, NULL);
-    pthread_join(action, NULL);
+    // pthread_join(action, NULL);
 
     close(pl->socket_tcp);
     close(pl->socket_multidiff);

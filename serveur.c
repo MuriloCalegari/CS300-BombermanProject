@@ -15,8 +15,7 @@
 
 #define HEIGHT 16
 #define WIDTH 16
-#define PLAYERS_PER_MATCH 4
-#define MULTICAST_ADDRESS "ff12::1"
+#define MULTICAST_ADDRESS "ff02::1"
 
 int current_udp_port = 2000; // Used for multicast groups
 int server_tcp_port;
@@ -106,7 +105,7 @@ void start_match(Match* match) {
 
 /* Used by the main thread to decide if it should setup a new match with no players */
 int should_setup_new_match(Match *match) {
-  if(match == NULL || match->players_count == PLAYERS_PER_MATCH) {
+  if(match == NULL || match->players_count == MAX_PLAYERS_PER_MATCH) {
     return 1;
   }
 
@@ -116,9 +115,9 @@ int should_setup_new_match(Match *match) {
 int can_start_match(Match *match) {
   assert(match != NULL);
 
-  if(match->players_count != PLAYERS_PER_MATCH) return 0;
+  if(match->players_count != MAX_PLAYERS_PER_MATCH) return 0;
 
-  for(int i = 0; i < PLAYERS_PER_MATCH; i++) {
+  for(int i = 0; i < MAX_PLAYERS_PER_MATCH; i++) {
     if(!match->player_status[i]) return 0;
   }
 
