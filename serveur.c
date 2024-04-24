@@ -18,7 +18,7 @@
 #define PLAYERS_PER_MATCH 4
 #define MULTICAST_ADDRESS "ff12::1"
 
-int current_udp_port = 1024; // Used for multicast groups
+int current_udp_port = 2000; // Used for multicast groups
 int server_tcp_port;
 int freq;
 
@@ -177,7 +177,7 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
       if(*current_4_opponents == NULL) {
         printf(" There are no current pending matches, so we'll start one on port %d\n", current_udp_port);
         Match *new_match = create_new_match_4_opponents(client_socket, current_udp_port, HEIGHT, WIDTH, MULTICAST_ADDRESS, freq);
-        current_udp_port++;
+        current_udp_port += 2;
         current_player_index = new_match->players[0];
         *current_4_opponents = new_match;
         launch_tcp_player_handler(new_match, current_player_index);
@@ -193,7 +193,7 @@ void handle_first_tcp_message(int client_socket, MessageHeader message_header, M
       if(*current_2_teams == NULL) {
         printf(" There are no current pending matches, so we'll start one\n");
         Match *new_match = create_new_match_2_teams(client_socket, current_udp_port, HEIGHT, WIDTH, MULTICAST_ADDRESS, freq);
-        current_udp_port++;
+        current_udp_port += 2;
         current_player_index = new_match->players[0];
         *current_2_teams = new_match;
         launch_tcp_player_handler(new_match, current_player_index);

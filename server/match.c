@@ -64,7 +64,7 @@ Match *create_new_match(int client_socket, int udp_port, int height, int width,
   new_match->sockets_tcp[player_id] = client_socket;
 
   new_match->multicast_port = udp_port;
-  new_match->udp_server_port = udp_port;
+  new_match->udp_server_port = udp_port + 1;
   new_match->socket_udp =
       setup_udp_listening_socket(new_match->udp_server_port);
 

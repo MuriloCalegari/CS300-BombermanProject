@@ -28,6 +28,7 @@ int wait_for_next_player(int socket) {
 }
 
 int prepare_socket_and_listen(int port) {
+  printf("Binding TCP socket to port %d\n", port);
   //*** creation de la socket serveur ***
   int sock = socket(PF_INET6, SOCK_STREAM, 0);
   if(sock < 0){

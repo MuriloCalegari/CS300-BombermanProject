@@ -124,6 +124,11 @@ int start_match(player *pl, int mode) {
     memcpy(&group.ipv6mr_multiaddr.s6_addr, pl->adr_udp, sizeof(pl->adr_udp));
     group.ipv6mr_interface = 0; //ifindex
 
+    // Use inet_ntop to convert the address to a human-readable string
+    char addr_str[INET6_ADDRSTRLEN];
+    inet_ntop(AF_INET6, &group.ipv6mr_multiaddr, addr_str, INET6_ADDRSTRLEN);
+    printf("Multicast group address: %s\n", addr_str);
+
     if(setsockopt(pl->socket_multidiff, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof group) < 0) {
         perror("echec de abonnement groupe");
         close(pl->socket_udp);
@@ -142,7 +147,7 @@ int start_match(player *pl, int mode) {
 
     header.header_line = htons(header.header_line);
 
-
+    printf("Ici!!\n");
     if(write_loop(pl->socket_tcp, &header, sizeof(header), 0) <= 0){
         perror("start_match, send");
         return -1;
@@ -354,7 +359,7 @@ int main(int argc, char** args){
     pthread_t refresh_party;
     pthread_t action;
 
-    pl->g = create_board();
+    // pl->g = create_board();
 
     if(pthread_create(&refresh_party, NULL, refresh_gameboard, pl)){
         perror("thread refresh party");
