@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 void affiche_connexion(struct sockaddr_in6 adrclient){
   char adr_buf[INET6_ADDRSTRLEN];
@@ -78,6 +79,16 @@ int setup_udp_listening_socket(int udp_port) {
     perror("bind");
     exit(-1);
   }
+
+  // Get ifindex
+  
+  // printf("Activating SO_REUSEADDR\n");
+  // int ok = 1;
+  // if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &ok, sizeof(ok)) < 0) {
+  //     perror("Error setting SO_REUSE_ADDR");
+  //     close(sock);
+  //     return 1;
+  // }
   
   return sock;
 }

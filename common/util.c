@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <poll.h>
 #include <arpa/inet.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <net/if.h>
 
 pthread_t *launch_thread(void *(*start_routine)(void *), void *arg) {
     pthread_t *thread = malloc(sizeof(pthread_t)); // Consider storing somewhere
@@ -48,7 +51,20 @@ int write_loop_udp(int fd, void * src, int n, struct sockaddr_in6 * dest_addr, s
   int sent = 0;
 
   while(sent != n) {
-    sent += sendto(fd, src + sent, n - sent, 0, (struct sockaddr *) dest_addr, dest_addr_len);
+    int just_sent = sendto(fd, src + sent, n - sent, 0, (struct sockaddr *) dest_addr, dest_addr_len);
+
+    if (just_sent == -1) {
+      perror("sendto");
+
+      // print address
+      char str[INET6_ADDRSTRLEN];
+      inet_ntop(AF_INET6, &(dest_addr->sin6_addr), str, INET6_ADDRSTRLEN);
+      printf("Address: %s\n", str);
+
+      return -1;
+    }
+
+    sent += just_sent;
   }
 
   return sent;

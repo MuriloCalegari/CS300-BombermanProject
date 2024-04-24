@@ -18,6 +18,7 @@
         "poll.h": "c",
         "util.h": "c",
         "server_utils.h": "c",
-        "cstdlib": "c"
+        "cstdlib": "c",
+        "if.h": "c"
     }
 }

@@ -13,11 +13,11 @@
 #include "server/match.h"
 #include "common/util.h"
 
-#define HEIGHT 16
-#define WIDTH 16
+#define HEIGHT 50
+#define WIDTH 50
 #define MULTICAST_ADDRESS "ff02::1"
 
-int current_udp_port = 2000; // Used for multicast groups
+int current_udp_port = 2050; // Used for multicast groups
 int server_tcp_port;
 int freq;
 
@@ -301,7 +301,7 @@ void *match_handler(void *arg) {
   while(1) {
     ActionMessage action_message;
 
-    read_loop(match->udp_server_port, &action_message, sizeof(ActionMessage), 0);
+    read_loop(match->inbound_socket_udp, &action_message, sizeof(ActionMessage), 0);
 
     if((GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_4_OPPONENTS
         || (GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_2_TEAMS) {

@@ -57,7 +57,8 @@ typedef struct Match {
     struct sockaddr_storage multicast_addr;
     uint16_t multicast_port; // in host endianness
     uint16_t udp_server_port; // in host endianness
-    int socket_udp;
+    int inbound_socket_udp;
+    int outbound_socket_udp;
 
     uint16_t full_update_current_num;
     uint16_t partial_update_current_num;

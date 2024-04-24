@@ -123,14 +123,13 @@ int start_match(player *pl, int mode) {
     
     int ifindex = -1;
     
-    if(strcmp(addr, "localhost") == 0)  {
+    if(strcmp(addr, "localhost") == 0 || strcmp(addr, "::1") == 0) {
         #ifdef TARGET_OS_OSX
         printf("Running on MacOS with localhost, using if_nametoindex for loopback interface\n");
         ifindex = if_nametoindex ("lo0");
         if(ifindex == 0)
             perror("if_nametoindex");
         #endif
-
     }
 
     /* subscribe to the multicast group */
@@ -219,7 +218,8 @@ int udp_message(player *pl, int action){
     struct sockaddr_in6 adr;
     memset(&adr, 0, sizeof(adr));
     adr.sin6_family = AF_INET6;
-    memcpy(&adr.sin6_addr, pl->adr_udp, sizeof(pl->adr_udp));
+    // memcpy(&adr.sin6_addr, pl->adr_udp, sizeof(pl->adr_udp));
+    inet_pton(AF_INET6, "::1", &adr.sin6_addr);
     adr.sin6_port = pl->port_udp;
 
     int send = sendto(pl->socket_udp, &buffer, sizeof(buffer), 0, (struct sockaddr *)&adr, sizeof(adr));
@@ -386,7 +386,8 @@ int main(int argc, char** args){
     //     return 1;
     // }
 
-    printf("MAIN: Waiting on all threads to finish...");
+    printf("Waiting on all threads to finish...\n");
+    udp_message(pl, MOVE_WEST);
     pthread_join(thread_tchat_read, NULL);
     pthread_join(refresh_party, NULL);
     // pthread_join(action, NULL);

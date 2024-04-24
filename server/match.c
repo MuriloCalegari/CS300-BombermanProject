@@ -8,6 +8,8 @@
 #include <assert.h>
 #include "../common/util.h"
 #include "network.h"
+#include <sys/socket.h>
+#include <net/if.h>
 
 void fill_address(struct sockaddr_storage *dst, int current_udp_port,
                   char *multicast_address) {
@@ -17,6 +19,11 @@ void fill_address(struct sockaddr_storage *dst, int current_udp_port,
   addr_ipv6.sin6_port = htons(current_udp_port);
 
   int s = inet_pton(AF_INET6, multicast_address, &addr_ipv6.sin6_addr);
+  
+  #ifdef TARGET_OS_OSX
+    printf("Running on MacOS with localhost, using loopback interface\n");
+        addr_ipv6.sin6_scope_id = if_nametoindex("lo0");
+  #endif
 
   if (s <= 0) {
     perror("inet_pton");
@@ -65,8 +72,9 @@ Match *create_new_match(int client_socket, int udp_port, int height, int width,
 
   new_match->multicast_port = udp_port;
   new_match->udp_server_port = udp_port + 1;
-  new_match->socket_udp =
+  new_match->inbound_socket_udp =
       setup_udp_listening_socket(new_match->udp_server_port);
+  new_match->outbound_socket_udp = socket(AF_INET6, SOCK_DGRAM, 0);
 
   fill_address(&new_match->multicast_addr, udp_port, multicast_address);
 
@@ -362,7 +370,7 @@ void send_partial_updates(CellStatusUpdate *movement_updates,
   struct sockaddr_in6 address;
   memcpy(&address, &match->multicast_addr, sizeof(address));
 
-  write_loop_udp(match->socket_udp, message, total_size, &address,
+  write_loop_udp(match->outbound_socket_udp, message, total_size, &address,
                  sizeof(address));
 
   free(message);
@@ -448,7 +456,7 @@ void send_full_grid_to_all_players(Match *match) {
     struct sockaddr_in6 address;
     memcpy(&address, &match->multicast_addr, sizeof(address));
 
-    write_loop_udp(match->socket_udp, message, total_size, &address,
+    write_loop_udp(match->outbound_socket_udp, message, total_size, &address,
                   sizeof(address));
 
     free(message);
@@ -561,6 +569,11 @@ int should_finish_match_four_opponents(Match *match) {
         players_alive++;
         winning_player = i;
       }
+    }
+
+    // Override for testing
+    if(match->players_count == 1) {
+      return NO_WINNER_YET;
     }
 
     if(players_alive > 1) {
@@ -679,7 +692,8 @@ void finish_match(Match* match, int result) {
   }
 
   printf("Closing UDP socket and freeing Match structure\n");
-  close(match->socket_udp);
+  close(match->inbound_socket_udp);
+  close(match->outbound_socket_udp);
   free(match->grid);
   free_bombs(match->bombs_head);
   pthread_mutex_destroy(&match->mutex);
