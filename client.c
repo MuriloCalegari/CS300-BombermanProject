@@ -153,6 +153,7 @@ int start_match(player *pl, int mode) {
 
 int tchat_message(player *pl, char *data){
     TChatHeader message;
+    memset(&message, 0, sizeof(message));
 
     if(strcmp(&data[0],"/") == 0 && strcmp(&data[0],"t") == 0 ) { // start message with "/t" for team tchat
         SET_CODEREQ(&message.header, T_CHAT_TEAM);
@@ -180,6 +181,7 @@ int tchat_message(player *pl, char *data){
 int udp_message(player *pl, int action){
 
     ActionMessage buffer;
+    memset(&buffer, 0, sizeof(buffer));
     if(pl->mode == MODE_NO_TEAM){
         SET_CODEREQ(&buffer.message_header, ACTION_MESSAGE_4_OPPONENTS);
     }else{
@@ -348,7 +350,7 @@ int main(int argc, char** args){
     inet_ntop(AF_INET6, pl->adr_udp, test, INET6_ADDRSTRLEN);
     printf("%s\n",test);
 
-    pthread_t thread_tchat_read;
+    /*pthread_t thread_tchat_read;
     pthread_t refresh_party;
     pthread_t action;
 
@@ -370,7 +372,7 @@ int main(int argc, char** args){
     pthread_join(thread_tchat_read, NULL);
     pthread_join(refresh_party, NULL);
     pthread_join(action, NULL);
-
+*/
     close(pl->socket_tcp);
     close(pl->socket_multidiff);
     close(pl->socket_udp);
