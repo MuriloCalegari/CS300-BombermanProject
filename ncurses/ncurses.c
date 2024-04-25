@@ -121,11 +121,14 @@ void refresh_game(board* b, line_w* lw, line_r* lr) {
     // tchat read
     for(y = b->h+2; y < b->h+2+3; y++){
         for(x = 0; x < b->w+2; x++){
-            if(lr->len[y] < x)
-                mvaddch(0, x, lr->data[y][x]);
+            if(x < lr->len[y-(b->h)+2]){
+                mvaddch(y, x, lr->data[y-(b->h)+2][x]);
+            }else{
+               mvaddch(y, x, ' ');
+            }
         }
     }
-    // tchat write
+    // // tchat write
     for (x = 0; x < b->w+2; x++) {
         if (x >= SIZE_MAX_MESSAGE || x >= lw->cursor)
             mvaddch(b->h+2+3, x, ' ');

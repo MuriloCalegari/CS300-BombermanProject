@@ -250,16 +250,20 @@ void *game_control(void *arg){
                 }
                 break;
             case 2: //left
-                udp_message(pl, MOVE_WEST);
+                if(pl->ready == 1)
+                    udp_message(pl, MOVE_WEST);
                 break;
             case 3: //right
-                udp_message(pl, MOVE_EAST);
+                if(pl->ready == 1)
+                    udp_message(pl, MOVE_EAST);
                 break;
             case 4: //up
-                udp_message(pl, MOVE_NORTH);
+                if(pl->ready == 1)
+                    udp_message(pl, MOVE_NORTH);
                 break;
             case 5: //down
-                udp_message(pl, MOVE_SOUTH);
+                if(pl->ready == 1)
+                    udp_message(pl, MOVE_SOUTH);
                 break;
             case 6: //bomb
             // TODO
@@ -317,17 +321,35 @@ void *refresh_gameboard(void *arg){ // multicast
     player pl = *(player *) arg;
 
     while(1){
-        MatchFullUpdateHeader head;
         socklen_t difflen = sizeof(pl.adr_udp);
-        recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
-        int len = head.height * head.width * sizeof(uint8_t);
-        char data[len];
-        recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
-        update_grid(pl.g->b, data);
+        MessageHeader header;
+        recvfrom(pl.socket_multidiff, &header, sizeof(header), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+        header.header_line = ntohs(header.header_line);
+        pl.ready = 1; // unlock control player
 
-        pthread_mutex_lock(&pl.mutex);
-        refresh_game(pl.g->b, pl.g->lw, pl.g->lr);
-        pthread_mutex_unlock(&pl.mutex);
+        if((GET_CODEREQ(&header)) == SERVER_FULL_MATCH_STATUS){
+            uint16_t num;
+            recvfrom(pl.socket_multidiff, &num, sizeof(num), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+            u_int8_t height;
+            recvfrom(pl.socket_multidiff, &height, sizeof(height), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+            uint8_t width;
+            recvfrom(pl.socket_multidiff, &width, sizeof(width), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+            int len = height * width * sizeof(uint8_t);
+            char data[len];
+            recvfrom(pl.socket_multidiff, &data, sizeof(data), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+            update_grid(pl.g->b, data);
+
+            pthread_mutex_lock(&pl.mutex);
+            refresh_game(pl.g->b, pl.g->lw, pl.g->lr);
+            pthread_mutex_unlock(&pl.mutex);
+        }else if((GET_CODEREQ(&header)) == SERVER_PARTIAL_MATCH_UPDATE){
+            uint16_t num;
+            recvfrom(pl.socket_multidiff, &num, sizeof(num), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+            uint8_t count;
+            recvfrom(pl.socket_multidiff, &count, sizeof(count), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+            pl.freq = count;
+        }
+
     }
     pthread_exit(NULL);
 }
@@ -336,6 +358,7 @@ void *refresh_gameboard(void *arg){ // multicast
 int main(int argc, char** args){
     player *pl = malloc(sizeof(player));
     pl->num = 0; // number of action
+    pl->ready = 0;
     pthread_mutex_init(&pl->mutex, 0);
 
     if(argc != 4){
@@ -345,6 +368,7 @@ int main(int argc, char** args){
 
     int port = atoi(args[1]);
     addr = args[2];
+    pl->server_adr = args[2];
     if((pl->socket_tcp = connect_to_server(port, addr)) < 0){
         printf("Connecting to server failed. Exiting...");
         return 1;
@@ -371,7 +395,8 @@ int main(int argc, char** args){
     pthread_t refresh_party;
     pthread_t action;
 
-    // pl->g = create_board();
+    pl->g = create_board();
+    refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
 
     if(pthread_create(&refresh_party, NULL, refresh_gameboard, pl)){
         perror("thread refresh party");
@@ -381,16 +406,18 @@ int main(int argc, char** args){
         perror("thread read tchat");
         return 1;
     }
-    // if(pthread_create(&action, NULL, game_control, pl)){
-    //     perror("action thread");
-    //     return 1;
-    // }
+    if(pthread_create(&action, NULL, game_control, pl)){
+        perror("action thread");
+        return 1;
+    }
 
-    printf("Waiting on all threads to finish...\n");
+    //printf("Waiting on all threads to finish...\n");
     udp_message(pl, MOVE_WEST);
     pthread_join(thread_tchat_read, NULL);
     pthread_join(refresh_party, NULL);
-    // pthread_join(action, NULL);
+    pthread_join(action, NULL);
+
+
 
     close(pl->socket_tcp);
     close(pl->socket_multidiff);

@@ -15,8 +15,11 @@ typedef struct player {
     int num;
     int mode;
     uint8_t adr_udp[16];
+    char *server_adr;
     int port_udp;
     int port_multidiff;
     pthread_mutex_t mutex;
     gameboard* g;
+    int freq;
+    int ready;
 } player;
