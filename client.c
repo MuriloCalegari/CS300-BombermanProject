@@ -317,17 +317,23 @@ void *refresh_gameboard(void *arg){ // multicast
     player pl = *(player *) arg;
 
     while(1){
-        MatchFullUpdateHeader head;
+        MessageHeader header;
         socklen_t difflen = sizeof(pl.adr_udp);
-        recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
-        int len = head.height * head.width * sizeof(uint8_t);
-        char data[len];
-        recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
-        update_grid(pl.g->b, data);
+        recvfrom(pl.socket_multidiff, &header, sizeof(header), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+        header.header_line = ntohs(header.header_line);
+        printf("Received multicast message with data CODEREQ(%d)\n", GET_CODEREQ(&header));
 
-        pthread_mutex_lock(&pl.mutex);
-        refresh_game(pl.g->b, pl.g->lw, pl.g->lr);
-        pthread_mutex_unlock(&pl.mutex);
+        // MatchFullUpdateHeader head;
+        // // socklen_t difflen = sizeof(pl.adr_udp);
+        // // recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+        // // int len = head.height * head.width * sizeof(uint8_t);
+        // // char data[len];
+        // // recvfrom(pl.socket_multidiff, &head, sizeof(head), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+        // // update_grid(pl.g->b, data);
+
+        // // pthread_mutex_lock(&pl.mutex);
+        // // refresh_game(pl.g->b, pl.g->lw, pl.g->lr);
+        // // pthread_mutex_unlock(&pl.mutex);
     }
     pthread_exit(NULL);
 }
