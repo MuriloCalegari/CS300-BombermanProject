@@ -17,7 +17,7 @@
 #define WIDTH 50
 #define MULTICAST_ADDRESS "ff02::1"
 
-int current_udp_port = 2050; // Used for multicast groups
+int current_udp_port = 10000; // Used for multicast groups
 int server_tcp_port;
 int freq;
 

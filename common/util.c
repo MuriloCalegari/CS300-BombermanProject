@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <net/if.h>
+#include "util.h"
 
 pthread_t *launch_thread(void *(*start_routine)(void *), void *arg) {
     pthread_t *thread = malloc(sizeof(pthread_t)); // Consider storing somewhere
@@ -62,6 +63,14 @@ int write_loop_udp(int fd, void * src, int n, struct sockaddr_in6 * dest_addr, s
       printf("Address: %s\n", str);
 
       return -1;
+    } else {
+      #ifdef DEBUG
+      char address[INET6_ADDRSTRLEN];
+      inet_ntop(AF_INET6, &(dest_addr->sin6_addr), address, INET6_ADDRSTRLEN);
+      int port = ntohs(dest_addr->sin6_port);
+
+      DEBUG_PRINTF("Sent %d bytes to %s:%d\n", just_sent, address, port);
+      #endif
     }
 
     sent += just_sent;
