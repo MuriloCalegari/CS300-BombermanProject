@@ -110,7 +110,7 @@ int start_match(player *pl, int mode) {
     adr.sin6_family = AF_INET6;
     //memcpy(&adr.sin6_addr, &pl.adr_udp, sizeof(pl.adr_udp));
     adr.sin6_addr = in6addr_any;
-    adr.sin6_port = pl->port_multidiff;
+    adr.sin6_port = htons(pl->port_multidiff);
 
     printf("Binding UDP socket to port %d\n", pl->port_multidiff);
     if(bind(pl->socket_multidiff, (struct sockaddr*) &adr, sizeof(adr))) {
