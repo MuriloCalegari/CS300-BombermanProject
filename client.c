@@ -233,7 +233,7 @@ int udp_message(player *pl, int action){
 
 void *game_control(void *arg){
     player *pl = (player *)arg;
-    while(1){
+    while(pl->ready == 1){
         ACTION a = control(pl->g->lw);
         switch(perform_action(pl->g->b, pl->g->p, a)){
             case -1: // quit
@@ -250,25 +250,48 @@ void *game_control(void *arg){
                 }
                 break;
             case 2: //left
-                if(pl->ready == 1)
-                    udp_message(pl, MOVE_WEST);
+                udp_message(pl, MOVE_WEST);
                 break;
             case 3: //right
-                if(pl->ready == 1)
-                    udp_message(pl, MOVE_EAST);
+                udp_message(pl, MOVE_EAST);
                 break;
             case 4: //up
-                if(pl->ready == 1)
-                    udp_message(pl, MOVE_NORTH);
+                udp_message(pl, MOVE_NORTH);
                 break;
             case 5: //down
-                if(pl->ready == 1)
-                    udp_message(pl, MOVE_SOUTH);
+                udp_message(pl, MOVE_SOUTH);
                 break;
             case 6: //bomb
             // TODO
             default: break;
         }
+    }
+    pthread_exit(NULL);
+}
+
+
+void *before_game_control(void *arg){
+    player *pl = (player *)arg;
+    while(pl->ready == 0){
+        ACTION a = control(pl->g->lw);
+        switch(perform_action(pl->g->b, pl->g->p, a)){
+            case -1: // quit
+                free_board(pl->g->b);
+                curs_set(1); // Set the cursor to visible again
+                endwin(); /* End curses mode */
+                free_gameboard(pl->g);
+                break;
+            case 1:
+                if(pl->g->lw->cursor > 0){
+                    tchat_message(pl, pl->g->lw->data);
+                    pl->g->lw->cursor=0;
+                    memset(pl->g->lw->data, 0, SIZE_MAX_MESSAGE);
+                }
+                break;
+            default: break;
+        }
+        usleep(30*1000);
+        refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
     }
     pthread_exit(NULL);
 }
@@ -394,9 +417,15 @@ int main(int argc, char** args){
     pthread_t thread_tchat_read;
     pthread_t refresh_party;
     pthread_t action;
+    pthread_t lobby;
 
     pl->g = create_board();
     refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
+
+    if(pthread_create(&lobby, NULL, before_game_control, pl)){
+        perror("thread refresh party");
+        return 1;
+    }
 
     if(pthread_create(&refresh_party, NULL, refresh_gameboard, pl)){
         perror("thread refresh party");
@@ -416,9 +445,9 @@ int main(int argc, char** args){
     pthread_join(thread_tchat_read, NULL);
     pthread_join(refresh_party, NULL);
     pthread_join(action, NULL);
+    pthread_join(lobby, NULL);
 
-
-
+    
     close(pl->socket_tcp);
     close(pl->socket_multidiff);
     close(pl->socket_udp);
