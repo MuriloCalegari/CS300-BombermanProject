@@ -317,6 +317,7 @@ void *refresh_gameboard(void *arg){ // multicast
     player pl = *(player *) arg;
 
     while(1){
+        // TODO conditionally read following bytes based on CODEREQ
         MessageHeader header;
         socklen_t difflen = sizeof(pl.adr_udp);
         recvfrom(pl.socket_multidiff, &header, sizeof(header), 0, (struct sockaddr *) &pl.adr_udp, &difflen);

@@ -346,6 +346,7 @@ void send_partial_updates(CellStatusUpdate *movement_updates,
   SET_CODEREQ(&header, SERVER_PARTIAL_MATCH_UPDATE);
   SET_ID(&header, 0);
   SET_EQ(&header, 0);
+  header.header_line = htons(header.header_line);
 
   MatchUpdateHeader match_update_header;
   memset(&match_update_header, 0, sizeof(match_update_header));
@@ -435,6 +436,7 @@ void send_full_grid_to_all_players(Match *match) {
     SET_CODEREQ(&header, SERVER_FULL_MATCH_STATUS);
     SET_ID(&header, 0);
     SET_EQ(&header, 0);
+    header.header_line = htons(header.header_line);
 
     MatchFullUpdateHeader match_update_header;
     memset(&match_update_header, 0, sizeof(match_update_header));
