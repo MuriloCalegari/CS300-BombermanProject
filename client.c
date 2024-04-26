@@ -14,6 +14,7 @@
 #include "ncurses/ncurses.h"
 #include "client/context.h"
 #include "client/network.h"
+#include "common/util.h"
 
 char* addr;
 
