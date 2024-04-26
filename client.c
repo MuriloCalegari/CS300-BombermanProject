@@ -110,7 +110,7 @@ int start_match(player *pl, int mode) {
     adr.sin6_family = AF_INET6;
     //memcpy(&adr.sin6_addr, &pl.adr_udp, sizeof(pl.adr_udp));
     adr.sin6_addr = in6addr_any;
-    adr.sin6_port = pl->port_multidiff;
+    adr.sin6_port = htons(pl->port_multidiff);
 
     printf("Binding UDP socket to port %d\n", pl->port_multidiff);
     if(bind(pl->socket_multidiff, (struct sockaddr*) &adr, sizeof(adr))) {
@@ -220,7 +220,7 @@ int udp_message(player *pl, int action){
     adr.sin6_family = AF_INET6;
     // memcpy(&adr.sin6_addr, pl->adr_udp, sizeof(pl->adr_udp));
     inet_pton(AF_INET6, "::1", &adr.sin6_addr);
-    adr.sin6_port = pl->port_udp;
+    adr.sin6_port = htons(pl->port_udp);
 
     int send = sendto(pl->socket_udp, &buffer, sizeof(buffer), 0, (struct sockaddr *)&adr, sizeof(adr));
     if(send < 0){
@@ -341,36 +341,36 @@ void *read_tcp_tchat(void* arg){
 }
 
 void *refresh_gameboard(void *arg){ // multicast
-    player pl = *(player *) arg;
+    player *pl = (player *) arg;
 
     while(1){
-        socklen_t difflen = sizeof(pl.adr_udp);
+        socklen_t difflen = sizeof(pl->adr_udp);
         MessageHeader header;
-        recvfrom(pl.socket_multidiff, &header, sizeof(header), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+        recvfrom(pl->socket_multidiff, &header, sizeof(header), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
         header.header_line = ntohs(header.header_line);
-        pl.ready = 1; // unlock control player
+        pl->ready = 1; // unlock control player
 
         if((GET_CODEREQ(&header)) == SERVER_FULL_MATCH_STATUS){
             uint16_t num;
-            recvfrom(pl.socket_multidiff, &num, sizeof(num), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+            recvfrom(pl->socket_multidiff, &num, sizeof(num), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
             u_int8_t height;
-            recvfrom(pl.socket_multidiff, &height, sizeof(height), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+            recvfrom(pl->socket_multidiff, &height, sizeof(height), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
             uint8_t width;
-            recvfrom(pl.socket_multidiff, &width, sizeof(width), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+            recvfrom(pl->socket_multidiff, &width, sizeof(width), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
             int len = height * width * sizeof(uint8_t);
             char data[len];
-            recvfrom(pl.socket_multidiff, &data, sizeof(data), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
-            update_grid(pl.g->b, data);
+            recvfrom(pl->socket_multidiff, &data, sizeof(data), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
+            update_grid(pl->g->b, data);
 
-            pthread_mutex_lock(&pl.mutex);
-            refresh_game(pl.g->b, pl.g->lw, pl.g->lr);
-            pthread_mutex_unlock(&pl.mutex);
+            pthread_mutex_lock(&pl->mutex);
+            refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
+            pthread_mutex_unlock(&pl->mutex);
         }else if((GET_CODEREQ(&header)) == SERVER_PARTIAL_MATCH_UPDATE){
             uint16_t num;
-            recvfrom(pl.socket_multidiff, &num, sizeof(num), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
+            recvfrom(pl->socket_multidiff, &num, sizeof(num), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
             uint8_t count;
-            recvfrom(pl.socket_multidiff, &count, sizeof(count), 0, (struct sockaddr *) &pl.adr_udp, &difflen);
-            pl.freq = count;
+            recvfrom(pl->socket_multidiff, &count, sizeof(count), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
+            pl->freq = count;
         }
 
     }
@@ -419,33 +419,42 @@ int main(int argc, char** args){
     pthread_t action;
     pthread_t lobby;
 
-    pl->g = create_board();
-    refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
+    //pl->g = create_board();
+    // refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
 
-    if(pthread_create(&lobby, NULL, before_game_control, pl)){
-        perror("thread refresh party");
-        return 1;
-    }
+    // if(pthread_create(&lobby, NULL, before_game_control, pl)){
+    //     perror("thread refresh party");
+    //     return 1;
+    // }
 
-    if(pthread_create(&refresh_party, NULL, refresh_gameboard, pl)){
-        perror("thread refresh party");
-        return 1;
-    }
-    if(pthread_create(&thread_tchat_read, NULL, read_tcp_tchat, pl)){
-        perror("thread read tchat");
-        return 1;
-    }
-    if(pthread_create(&action, NULL, game_control, pl)){
-        perror("action thread");
-        return 1;
-    }
+    // if(pthread_create(&refresh_party, NULL, refresh_gameboard, pl)){
+    //     perror("thread refresh party");
+    //     return 1;
+    // }
+    // if(pthread_create(&thread_tchat_read, NULL, read_tcp_tchat, pl)){
+    //     perror("thread read tchat");
+    //     return 1;
+    // }
+    // if(pthread_create(&action, NULL, game_control, pl)){
+    //     perror("action thread");
+    //     return 1;
+    // }
 
     //printf("Waiting on all threads to finish...\n");
     udp_message(pl, MOVE_WEST);
-    pthread_join(thread_tchat_read, NULL);
-    pthread_join(refresh_party, NULL);
-    pthread_join(action, NULL);
-    pthread_join(lobby, NULL);
+
+    // pthread_join(thread_tchat_read, NULL);
+    // pthread_join(refresh_party, NULL);
+    // pthread_join(action, NULL);
+    // pthread_join(lobby, NULL);
+
+    while(1){
+        socklen_t difflen = sizeof(pl->adr_udp);
+        MessageHeader header;
+        recvfrom(pl->socket_multidiff, &header, sizeof(header), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
+        header.header_line = ntohs(header.header_line);
+        printf("hedaer : %d\n", GET_CODEREQ(&header));
+    }
 
     
     close(pl->socket_tcp);
