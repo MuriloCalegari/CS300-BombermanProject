@@ -48,7 +48,9 @@ void setup_board(board* board) {
     columns = DIM;
     board->h = lines + 1 + 3; //  4 (1 tchat write, 3 tchat read) row for chat
     board->w = columns;
-    board->grid = calloc((board->w)*(board->h),sizeof(char));
+    for(int i=0; i < (DIM*DIM); i++){
+        board->grid[i] = -1;
+    }
 }
 
 void free_board(board* board) {
