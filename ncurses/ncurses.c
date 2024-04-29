@@ -17,6 +17,10 @@ gameboard* create_board(){
     g->p = malloc(sizeof(pos));
     g->p->x = 0; g->p->y = 0;
 
+    for(int i=0; i < MAX_VERTICAL_LINE; i++){
+        g->lr->len[i] = 0;
+    }
+
     // NOTE: All ncurses operations (getch, mvaddch, refresh, etc.) must be done on the same thread.
     initscr(); /* Start curses mode */
     raw(); /* Disable line buffering */
@@ -105,15 +109,17 @@ void refresh_game(board* b, line_w* lw, line_r* lr) {
     attron(COLOR_PAIR(1)); // Enable custom color 1
     attron(A_BOLD); // Enable bold
     // tchat read
+    int i = 0;
     for(y = b->h-4; y < b->h-1; y++){
         for(x = 0; x < b->w; x++){
-            if(x < lr->len[b->h - y - 4]){
-                mvaddch(y, x, lr->data[b->h - y -4][x]);
+            if(x < lr->len[i]){
+                mvaddch(y, x, lr->data[i][x]);
             }else{
                mvaddch(y, x, '+');
                 // mvaddch(y, x, ' ');
             }
         }
+        i++;
     }
     // tchat write
     for (x = 0; x < b->w; x++) {
@@ -166,61 +172,58 @@ ACTION control(line_w* l) {
 }
 
 int perform_action(board* b, pos* p, ACTION a) {
-    int xd = 0;
-    int yd = 0;
     int res = 0;
     switch (a) {
         case LEFT:
-            xd = -1; yd = 0; res=2; break;
+            res=2; break;
         case RIGHT:
-            xd = 1; yd = 0; res=3; break;
+            res=3; break;
         case UP:
-            xd = 0; yd = -1; res=4; break;
+            res=4; break;
         case DOWN:
-            xd = 0; yd = 1; res=5; break;
+            res=5; break;
         case ENTER:
             return 1;
         case QUIT:
             return -1;
         default: break;
     }
-    // p->x += xd; p->y += yd;
-    // p->x = (p->x + b->w)%b->w;
-    // p->y = (p->y + b->h)%b->h;
-    // set_grid(b,p->x,p->y,1);
     return res;
 }
 
-void test(gameboard *g){
-    char up[DIM*DIM];
-    for(int i=0; i<DIM; i++){
-        up[i] = 'u';
-    }
+// void test(gameboard *g){
+//     char up[DIM*DIM];
+//     for(int i=0; i<DIM; i++){
+//         up[i] = 'u';
+//     }
 
-    for(int j=DIM; j<DIM; j++){
-        srand(time(NULL));
-        up[j] = 3;
-    }
-    // update_grid(g->b, up);
-    g->b->grid = up;
-    //memcpy(g->b->grid, up, sizeof(up));
-}
+//     for(int j=DIM; j<DIM; j++){
+//         srand(time(NULL));
+//         up[j] = 3;
+//     }
+//     // update_grid(g->b, up);
+//     g->b->grid = up;
+//     //memcpy(g->b->grid, up, sizeof(up));
+// }
 
 // int main(){
 //     gameboard *g = create_board();
 //     strcpy(g->lr->data[0], "bonjour");
 //     g->lr->len[0] = strlen("bonjour");
-//     printf("%s\n", g->lr->data[0]);
+//     strcpy(g->lr->data[1], "world");
+//     g->lr->len[1] = strlen("world");
+//     strcpy(g->lr->data[2], "francois");
+//     g->lr->len[2] = strlen("francois");
 //     while(1){
 //         ACTION a = control(g->lw);
 //         if(perform_action(g->b, g->p, a) == -1) break;
-//         test(g);
+//         // test(g);
 //         refresh_game(g->b, g->lw, g->lr);
-//         usleep(70*10000);
+//         usleep(70*1000);
 //     }
 //     curs_set(1); // Set the cursor to visible again
 //     endwin(); /* End curses mode */
-//     printf("%s\n", g->lr->data[0]);
+//     printf("%s\n", g->lr->data[1]);
 //     printf("test\n");
 //     printf("%d\n", g->b->h);
 //     return 0;

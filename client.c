@@ -194,13 +194,18 @@ int tchat_message(player *pl, char *data){
     message.header.header_line = htons(message.header.header_line);
 
     message.data_len = strlen(data);
+    char res[strlen(data)];
     int i;
-    for(i=0; i<message.data_len-1; i++){
-        message.data[i] = data[i];
+    for(i=0; i<message.data_len; i++){
+        res[i] = data[i];
     }
-    message.data[i+1] = 0;
+    res[i+1] = 0;
 
     if(write_loop(pl->socket_tcp, &message, sizeof(message), 0) <= 0){
+        perror("tchat_message, send");
+        return -1;
+    }
+    if(write_loop(pl->socket_tcp, &res, strlen(data), 0) <= 0){
         perror("tchat_message, send");
         return -1;
     }
@@ -242,6 +247,7 @@ int udp_message(player *pl, int action){
 
 void *game_control(void *arg){
     player *pl = (player *)arg;
+    pl->id = 1;
     while(pl->ready == 1){
         ACTION a = control(pl->g->lw);
         switch(perform_action(pl->g->b, pl->g->p, a)){
@@ -318,30 +324,39 @@ void *read_tcp_tchat(void* arg){
 
         pthread_mutex_lock(&pl->mutex);
 
-        char data[SIZE_MAX_MESSAGE];
-        memcpy(&resp.data, data, sizeof(resp.data));
+        char data[resp.data_len];
+
+        if(read_loop(pl->socket_tcp, &data, resp.data_len, 0) <= 0){
+            perror("read_tcp, recv");
+        }
 
         //update tchat
         switch(pl->g->lr->nb_line){
             case 0:
-                memcpy(&pl->g->lr->data[0], data, sizeof(data));
+                memcpy(&pl->g->lr->data[0], data, resp.data_len);
+                pl->g->lr->len[0] = resp.data_len;
                 pl->g->lr->nb_line++;
                 break;
             case 1:
-                memcpy(&pl->g->lr->data[1], data, sizeof(data));
+                memcpy(&pl->g->lr->data[1], data, resp.data_len);
+                pl->g->lr->len[1] = resp.data_len;
                 pl->g->lr->nb_line++;
                 break;
             case 2:
-                memcpy(&pl->g->lr->data[2], data, sizeof(data));
+                memcpy(&pl->g->lr->data[2], data, resp.data_len);
+                pl->g->lr->len[2] = resp.data_len;
                 pl->g->lr->nb_line++;
                 break;
             default:
                 memset(&pl->g->lr->data[0], 0, SIZE_MAX_MESSAGE); // clear source to get a new data
                 memmove(&pl->g->lr->data[0], pl->g->lr->data[1], sizeof(pl->g->lr->data[0]));
+                pl->g->lr->len[0] = pl->g->lr->len[1];
                 memset(&pl->g->lr->data[1], 0, SIZE_MAX_MESSAGE);
                 memmove(&pl->g->lr->data[1], pl->g->lr->data[2], sizeof(pl->g->lr->data[0]));
+                pl->g->lr->len[1] = pl->g->lr->len[2];
                 memset(&pl->g->lr->data[2], 0, SIZE_MAX_MESSAGE);
                 memcpy(&pl->g->lr->data[2], data, sizeof(data));
+                pl->g->lr->len[2] = resp.data_len;
                 break;
         }
         pthread_mutex_unlock(&pl->mutex);
@@ -430,6 +445,7 @@ int main(int argc, char** args){
 
     pl->g = create_board();
     refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
+    //endwin();
 
     // if(pthread_create(&lobby, NULL, before_game_control, pl)){
     //     perror("thread refresh party");
@@ -440,10 +456,10 @@ int main(int argc, char** args){
         perror("thread refresh party");
         return 1;
     }
-    // if(pthread_create(&thread_tchat_read, NULL, read_tcp_tchat, pl)){
-    //     perror("thread read tchat");
-    //     return 1;
-    // }
+    if(pthread_create(&thread_tchat_read, NULL, read_tcp_tchat, pl)){
+        perror("thread read tchat");
+        return 1;
+    }
     if(pthread_create(&action, NULL, game_control, pl)){
         perror("action thread");
         return 1;
@@ -452,7 +468,7 @@ int main(int argc, char** args){
     //printf("Waiting on all threads to finish...\n");
     //udp_message(pl, MOVE_WEST);
 
-    //pthread_join(thread_tchat_read, NULL);
+    pthread_join(thread_tchat_read, NULL);
     pthread_join(refresh_party, NULL);
     pthread_join(action, NULL);
     //pthread_join(lobby, NULL);

@@ -221,29 +221,28 @@ void send_message(Match *match, int player_index, int mode){
   read_loop(match->sockets_tcp[player_index], &len, sizeof(uint8_t), 0);
   uint8_t data[len];
   read_loop(match->sockets_tcp[player_index], data, len, 0);
+  msg.data_len = len;
+  
+  SET_ID(&msg.header, match->players[player_index]);
 
   if(mode == T_CHAT_ALL_PLAYERS){
     // TODO FIX This will break the loop before intended
     for(int i=0; (i<match->players_count) && (i!=player_index); i++){
       SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_ALL_PLAYERS);
-      SET_ID(&msg.header, match->players[player_index]);
       msg.header.header_line = htons(msg.header.header_line);
-      msg.data_len = len;
-      memcpy(&msg, data, len);
 
       write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
+      write_loop(match->sockets_tcp[i], &data, len, 0);
     }
   }else {
     // TODO FIX This will break the loop before intended
     for(int i=0; (i<match->players_count) && (i!=player_index) && (match->players_team[i]==match->players_team[player_index]); i++){
       SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_TEAM);
-      SET_ID(&msg.header, match->players[player_index]);
       SET_EQ(&msg.header, match->players_team[player_index]);
       msg.header.header_line = htons(msg.header.header_line);
-      msg.data_len = len;
-      memcpy(&msg, data, len);
 
       write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
+      write_loop(match->sockets_tcp[i], &data, len, 0);
     }
   }
 }

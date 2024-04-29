@@ -83,7 +83,6 @@ typedef struct ActionMessage {
 typedef struct TChatHeader {
     MessageHeader header;
     uint8_t data_len;
-    uint8_t data[SIZE_MAX_MESSAGE];
 } TChatHeader;
 
 
