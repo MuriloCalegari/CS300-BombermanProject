@@ -72,12 +72,12 @@ int main(int argc, char** args) {
     handle_first_tcp_message(client_socket, message_header, &current_match_4_opponents, &current_match_2_teams);
 
     if(should_setup_new_match(current_match_4_opponents)) {
-      DEBUG_PRINTF("MAIN: Setting current_match_4_opponents to NULL");
+      DEBUG_PRINTF("MAIN: Setting current_match_4_opponents to NULL\n");
       current_match_4_opponents = NULL;
     }
 
     if(should_setup_new_match(current_match_2_teams)) {
-      DEBUG_PRINTF("MAIN: Setting current_match_2_teams to NULL");
+      DEBUG_PRINTF("MAIN: Setting current_match_2_teams to NULL\n");
       current_match_2_teams = NULL;
     }
   }

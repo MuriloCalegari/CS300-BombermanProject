@@ -64,7 +64,7 @@ int write_loop_udp(int fd, void * src, int n, struct sockaddr_in6 * dest_addr, s
 
       return -1;
     } else {
-      #ifdef DEBUG
+      #ifdef VERBOSE
       char address[INET6_ADDRSTRLEN];
       inet_ntop(AF_INET6, &(dest_addr->sin6_addr), address, INET6_ADDRSTRLEN);
       int port = ntohs(dest_addr->sin6_port);
