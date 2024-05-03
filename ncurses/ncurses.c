@@ -49,7 +49,7 @@ void setup_board(board* board) {
     board->h = lines + 1 + 3; //  4 (1 tchat write, 3 tchat read) row for chat
     board->w = columns;
     for(int i=0; i < (DIM*DIM); i++){
-        board->grid[i] = -1;
+        board->grid[i] = 0;
     }
 }
 
@@ -193,40 +193,49 @@ int perform_action(board* b, pos* p, ACTION a) {
     return res;
 }
 
-// void test(gameboard *g){
-//     char up[DIM*DIM];
-//     for(int i=0; i<DIM; i++){
-//         up[i] = 'u';
-//     }
 
-//     for(int j=DIM; j<DIM; j++){
-//         srand(time(NULL));
-//         up[j] = 3;
-//     }
-//     // update_grid(g->b, up);
-//     g->b->grid = up;
-//     //memcpy(g->b->grid, up, sizeof(up));
-// }
+void test(gameboard *g){
+    int up[DIM*DIM];
+    for(int i=0; i<DIM; i++){
+        up[i] = 1;
+    }
 
-// int main(){
-//     gameboard *g = create_board();
-//     strcpy(g->lr->data[0], "bonjour");
-//     g->lr->len[0] = strlen("bonjour");
-//     strcpy(g->lr->data[1], "world");
-//     g->lr->len[1] = strlen("world");
-//     strcpy(g->lr->data[2], "francois");
-//     g->lr->len[2] = strlen("francois");
-//     while(1){
-//         ACTION a = control(g->lw);
-//         if(perform_action(g->b, g->p, a) == -1) break;
-//         // test(g);
-//         refresh_game(g->b, g->lw, g->lr);
-//         usleep(70*1000);
-//     }
-//     curs_set(1); // Set the cursor to visible again
-//     endwin(); /* End curses mode */
-//     printf("%s\n", g->lr->data[1]);
-//     printf("test\n");
-//     printf("%d\n", g->b->h);
-//     return 0;
-// }
+    for(int j=DIM; j<DIM; j++){
+        srand(time(NULL));
+        up[j] = rand()%3;
+    }
+
+    for(int i=0; i<DIM; i++){
+        up[i*DIM] = 2;
+    }
+
+    //g->b->grid = up;
+    for(int i=0; i<DIM*DIM; i++){
+        g->b->grid[i] = up[i];
+    }
+}
+
+/*
+int main(){
+    gameboard *g = create_board();
+    strcpy(g->lr->data[0], "bonjour");
+    g->lr->len[0] = strlen("bonjour");
+    strcpy(g->lr->data[1], "world");
+    g->lr->len[1] = strlen("world");
+    strcpy(g->lr->data[2], "francois");
+    g->lr->len[2] = strlen("francois");
+    while(1){
+        ACTION a = control(g->lw);
+        if(perform_action(g->b, g->p, a) == -1) break;
+        test(g);
+        refresh_game(g->b, g->lw, g->lr);
+        usleep(70*1000);
+    }
+    curs_set(1); // Set the cursor to visible again
+    endwin();
+    printf("%s\n", g->lr->data[1]);
+    printf("test\n");
+    printf("%d\n", g->b->h);
+    return 0;
+}
+*/

@@ -48,3 +48,4 @@ int perform_action(board* b, pos* p, ACTION a);
 gameboard* create_board();
 void free_gameboard(gameboard *g);
 void update_grid(board* b, char *up);
+void test(gameboard *g);
