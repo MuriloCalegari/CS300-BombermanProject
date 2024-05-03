@@ -248,21 +248,23 @@ int udp_message(player *pl, int action){
 void *game_control(void *arg){
     player *pl = (player *)arg;
     pl->id = 1;
-    while(pl->ready == 1){
+    while(/*pl->ready == 1 && */ pl->end == 0){
         ACTION a = control(pl->g->lw);
+        pthread_mutex_lock(&pl->mutex);
         switch(perform_action(pl->g->b, pl->g->p, a)){
             case -1: // quit
                 free_board(pl->g->b);
                 curs_set(1); // Set the cursor to visible again
                 endwin(); /* End curses mode */
                 free_gameboard(pl->g);
-                break;
+                pl->end = 1;
+                pthread_exit(NULL);
             case 1:
-                if(pl->g->lw->cursor > 0){
+                //if(pl->g->lw->cursor > 0){
                     tchat_message(pl, pl->g->lw->data);
                     pl->g->lw->cursor=0;
                     memset(pl->g->lw->data, 0, SIZE_MAX_MESSAGE);
-                }
+                //}
                 break;
             case 2: //left
                 udp_message(pl, MOVE_WEST);
@@ -280,6 +282,7 @@ void *game_control(void *arg){
             // TODO
             default: break;
         }
+        pthread_mutex_unlock(&pl->mutex);
     }
     pthread_exit(NULL);
 }
@@ -367,7 +370,7 @@ void *read_tcp_tchat(void* arg){
 void *refresh_gameboard(void *arg){ // multicast
     player *pl = (player *) arg;
 
-    while(1){
+    while(pl->end == 0){
         socklen_t difflen = sizeof(pl->adr_udp);
         MessageHeader header;
         recvfrom(pl->socket_multidiff, &header, sizeof(header), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
@@ -406,6 +409,7 @@ int main(int argc, char** args){
     player *pl = malloc(sizeof(player));
     pl->num = 0; // number of action
     pl->ready = 0;
+    pl->end = 0;
     pthread_mutex_init(&pl->mutex, 0);
 
     if(argc != 4){
@@ -466,21 +470,11 @@ int main(int argc, char** args){
     }
 
     //printf("Waiting on all threads to finish...\n");
-    //udp_message(pl, MOVE_WEST);
 
     pthread_join(thread_tchat_read, NULL);
     pthread_join(refresh_party, NULL);
     pthread_join(action, NULL);
     //pthread_join(lobby, NULL);
-
-    // while(1){
-    //     socklen_t difflen = sizeof(pl->adr_udp);
-    //     MessageHeader header;
-    //     recvfrom(pl->socket_multidiff, &header, sizeof(header), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
-    //     header.header_line = ntohs(header.header_line);
-    //     printf("hedaer : %d\n", GET_CODEREQ(&header));
-    // }
-
     
     close(pl->socket_tcp);
     close(pl->socket_multidiff);
