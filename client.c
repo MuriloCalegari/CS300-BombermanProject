@@ -122,37 +122,37 @@ int start_match(player *pl, int mode) {
 
     // If address equals localhost and this is a mac then...
     
-    // int ifindex = -1;
+    int ifindex = -1;
     
-    // if(strcmp(addr, "localhost") == 0 || strcmp(addr, "::1") == 0) {
-    //     #ifdef TARGET_OS_OSX
-    //     printf("Running on MacOS with localhost, using if_nametoindex for loopback interface\n");
-    //     ifindex = if_nametoindex ("lo0");
-    //     if(ifindex == 0)
-    //         perror("if_nametoindex");
-    //     #endif
-    // }
+    if(strcmp(addr, "localhost") == 0 || strcmp(addr, "::1") == 0) {
+        #ifdef TARGET_OS_OSX
+        printf("Running on MacOS with localhost, using if_nametoindex for loopback interface\n");
+        ifindex = if_nametoindex ("lo0");
+        if(ifindex == 0)
+            perror("if_nametoindex");
+        #endif
+        #ifdef __linux
+        printf("Running on Linux with localhost, using eth0 interface\n");
+        ifindex = if_nametoindex ("eth0");
+        if(ifindex == 0)
+            perror("if_nametoindex");
+        #endif
+    }
 
     // /* subscribe to the multicast group */
     // struct ipv6_mreq group;
-    // memcpy(&group.ipv6mr_multiaddr.s6_addr, pl->adr_udp, sizeof(pl->adr_udp));
-    // if(ifindex == -1)
-    //     group.ipv6mr_interface = 0; // all interfaces
-    // else
-    //     group.ipv6mr_interface = ifindex; // override
 
     // Use inet_ntop to convert the address to a human-readable string
     // char addr_str[INET6_ADDRSTRLEN];
     // inet_ntop(AF_INET6, &group.ipv6mr_multiaddr, addr_str, INET6_ADDRSTRLEN);
     // printf("Joining multicast group address: %s\n", addr_str);
 
-    int ifindex = if_nametoindex ("eth0");
-    if(ifindex == 0)
-        perror("if_nametoindex");
-
     struct ipv6_mreq group;
     memcpy(&group.ipv6mr_multiaddr.s6_addr, pl->adr_udp, sizeof(pl->adr_udp));
-    group.ipv6mr_interface = ifindex;
+    if(ifindex == -1)
+        group.ipv6mr_interface = 0; // all interfaces
+    else
+        group.ipv6mr_interface = ifindex; // override
 
     if(setsockopt(pl->socket_multidiff, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof group) < 0) {
         perror("echec de abonnement groupe");
