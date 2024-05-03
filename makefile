@@ -6,14 +6,6 @@ S = server
 C = client
 COMMON = common
 
-CC = gcc
-CFLAGS = -Wall -Wextra -g -DDEBUG
-LIBS = -lncurses
-
-S = server
-C = client
-COMMON = common
-
 SRCS_COMMON = $(COMMON)/util.c \
 				ncurses/ncurses.c
 
