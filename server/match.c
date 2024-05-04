@@ -81,6 +81,7 @@ Match *create_new_match(int client_socket, int udp_port, int height, int width,
   new_match->height = height;
   new_match->width = width;
   new_match->grid = malloc(height * width * sizeof(uint8_t));
+  initialize_grid(new_match);
 
   // Put the player on the grid
   int initial_position = get_player_initial_position(player_id, width, height);
@@ -152,26 +153,26 @@ void initialize_grid(Match *match) {
 
   memset(match->grid, EMPTY_CELL, grid_size * sizeof(*match->grid));
 
-  // TODO place destructible and undestructible walls on the grid
-  for (int i = 1; i < match->height - 1; i++) {
-    if (i % 2 == 0) continue;
-    for (int j = 1; j < match->width - 1; j++) {
-      if (j % 2 == 1) {
-        match->grid[i * match->width + j] = INDESTRUCTIBLE_WALL;
-      }
-    }
-  }
-  srand(time(NULL));
-  int a_place = grid_size / 3;
-  int nb = 0;
-  while (nb < a_place) {
-    int i = rand() % (match->height - 2) + 1;
-    int j = rand() % (match->width - 2) + 1;
-    if (match->grid[i * match->width + j] == EMPTY_CELL) {
-      match->grid[i * match->width + j] = DESTRUCTIBLE_WALL;
-      nb++;
-    }
-  }
+  // // TODO place destructible and undestructible walls on the grid
+  // for (int i = 1; i < match->height - 1; i++) {
+  //   if (i % 2 == 0) continue;
+  //   for (int j = 1; j < match->width - 1; j++) {
+  //     if (j % 2 == 1) {
+  //       match->grid[i * match->width + j] = INDESTRUCTIBLE_WALL;
+  //     }
+  //   }
+  // }
+  // srand(time(NULL));
+  // int a_place = grid_size / 3;
+  // int nb = 0;
+  // while (nb < a_place) {
+  //   int i = rand() % (match->height - 2) + 1;
+  //   int j = rand() % (match->width - 2) + 1;
+  //   if (match->grid[i * match->width + j] == EMPTY_CELL) {
+  //     match->grid[i * match->width + j] = DESTRUCTIBLE_WALL;
+  //     nb++;
+  //   }
+  // }
 };
 
 // We use this constant such that a message with num [0, OVERFLOW_DETECTION]
@@ -279,8 +280,8 @@ int move_player(Match *match, int player_index, int action,
     return OUT_OF_BOUNDS;
   }
 
-  if (match->grid[new_position] != EMPTY_CELL ||
-      match->grid[new_position] != EXPLODED_BY_BOMB) {
+  if (!(match->grid[new_position] == EMPTY_CELL ||
+      match->grid[new_position] == EXPLODED_BY_BOMB)) {
     printf("Player %d tried to move to an occupied cell\n", player_index);
     return OCCUPIED_CELL;
   }

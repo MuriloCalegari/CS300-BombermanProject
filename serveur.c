@@ -13,8 +13,8 @@
 #include "server/match.h"
 #include "common/util.h"
 
-#define HEIGHT 50
-#define WIDTH 50
+#define HEIGHT DIM
+#define WIDTH DIM
 #define MULTICAST_ADDRESS "ff02::1"
 
 int current_udp_port = 10000; // Used for multicast groups
@@ -93,8 +93,6 @@ int main(int argc, char** args) {
 
 void start_match(Match* match) {
   printf("Starting match with %d players\n", match->players_count);
-
-  initialize_grid(match);
 
   MatchHandlerThreadContext *context = malloc(sizeof(MatchHandlerThreadContext));
   context->match = match;

@@ -45,7 +45,7 @@ int connect_to_server(int port, char* addr){
 }
 
 void print_header(MessageHeader* header){
-    printf("MessageHeader: CODEREQ(%d) ID(%d) EQ(%d)\n",
+    fprintf(stderr, "MessageHeader: CODEREQ(%d) ID(%d) EQ(%d)\n",
         GET_CODEREQ(header), GET_ID(header), GET_EQ(header));
 }
 
@@ -60,7 +60,7 @@ int start_match(player *pl, int mode) {
     SET_CODEREQ(&header, pl->mode);
     header.header_line = htons(header.header_line);
 
-    printf("\nStarting match with server. Sending header:\n");
+    fprintf(stderr, "\nStarting match with server. Sending header:\n");
     print_header(&header);
 
     if(send(pl->socket_tcp, &header, sizeof(header), 0) == -1){
@@ -72,7 +72,7 @@ int start_match(player *pl, int mode) {
     NewMatchMessage resp;
     memset(&resp, 0, sizeof(resp));
 
-    printf("Waiting for server response...\n");
+    fprintf(stderr, "Waiting for server response...\n");
     if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
         perror("start_match, recv");
         return -1;
@@ -81,7 +81,7 @@ int start_match(player *pl, int mode) {
     // codereq check
     resp.header.header_line = ntohs(resp.header.header_line); // convert
     int test = GET_CODEREQ(&resp.header);
-    printf("codereq %d\n", test);
+    fprintf(stderr, "codereq %d\n", test);
     if(((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_4_OPPONENTS && mode == MODE_NO_TEAM) ||
     ((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_2_TEAMS && mode == MODE_2_TEAM)) {
         perror("start_match, error recv codereq");
@@ -113,7 +113,7 @@ int start_match(player *pl, int mode) {
     adr.sin6_addr = in6addr_any;
     adr.sin6_port = htons(pl->port_multidiff);
 
-    printf("Binding UDP socket to port %d\n", pl->port_multidiff);
+    fprintf(stderr, "Binding UDP socket to port %d\n", pl->port_multidiff);
     if(bind(pl->socket_multidiff, (struct sockaddr*) &adr, sizeof(adr))) {
         perror("echec de bind");
         close(pl->socket_udp);
@@ -126,13 +126,13 @@ int start_match(player *pl, int mode) {
     
     if(strcmp(addr, "localhost") == 0 || strcmp(addr, "::1") == 0) {
         #ifdef TARGET_OS_OSX
-        printf("Running on MacOS with localhost, using if_nametoindex for loopback interface\n");
+        fprintf(stderr, "Running on MacOS with localhost, using if_nametoindex for loopback interface\n");
         ifindex = if_nametoindex ("lo0");
         if(ifindex == 0)
             perror("if_nametoindex");
         #endif
         #ifdef __linux
-        printf("Running on Linux with localhost, using eth0 interface\n");
+        fprintf(stderr, "Running on Linux with localhost, using eth0 interface\n");
         ifindex = if_nametoindex ("eth0");
         if(ifindex == 0)
             perror("if_nametoindex");
@@ -145,7 +145,7 @@ int start_match(player *pl, int mode) {
     // Use inet_ntop to convert the address to a human-readable string
     // char addr_str[INET6_ADDRSTRLEN];
     // inet_ntop(AF_INET6, &group.ipv6mr_multiaddr, addr_str, INET6_ADDRSTRLEN);
-    // printf("Joining multicast group address: %s\n", addr_str);
+    // fprintf(stderr, "Joining multicast group address: %s\n", addr_str);
 
     struct ipv6_mreq group;
     memcpy(&group.ipv6mr_multiaddr.s6_addr, pl->adr_udp, sizeof(pl->adr_udp));
@@ -367,40 +367,52 @@ void *read_tcp_tchat(void* arg){
     pthread_exit(NULL);
 }
 
-void *refresh_gameboard(void *arg){ // multicast
-    player *pl = (player *) arg;
+void print_board(board* b) {
+    // Print board to stderr
+    for(int i = 0; i < DIM; i++) {
+        for(int j = 0; j < DIM; j++) {
+            fprintf(stderr, "%d ", get_grid(b, j, i));
+        }
+        fprintf(stderr, "\n");
+    }
+}
 
-    while(pl->end == 0){
-        socklen_t difflen = sizeof(pl->adr_udp);
-        MessageHeader header;
-        recvfrom(pl->socket_multidiff, &header, sizeof(header), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
-        header.header_line = ntohs(header.header_line);
+void refresh_gameboard_implementation(player *pl) {
+    int buf_size = sizeof(MatchFullUpdateHeader) + (DIM * DIM * sizeof(uint8_t));
+    fprintf(stderr, "Mallocing buffer of size %d\n", buf_size);
+    char *buf = malloc(buf_size);
+    // char *grid_data = malloc(pl->g->b->h * pl->g->b->w * sizeof(uint8_t));
+    MessageHeader *header;
+    while(pl->end == 0){    
+        recvfrom(pl->socket_multidiff, buf, buf_size, 0, NULL, 0);
+        header = (MessageHeader *) buf;
+        header->header_line = ntohs(header->header_line);
+        fprintf(stderr, "Received header:\n");
+        print_header(header);
+
         pl->ready = 1; // unlock control player
 
-        if((GET_CODEREQ(&header)) == SERVER_FULL_MATCH_STATUS){
-            uint16_t num;
-            recvfrom(pl->socket_multidiff, &num, sizeof(num), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
-            u_int8_t height;
-            recvfrom(pl->socket_multidiff, &height, sizeof(height), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
-            uint8_t width;
-            recvfrom(pl->socket_multidiff, &width, sizeof(width), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
-            int len = height * width * sizeof(uint8_t);
-            char data[len];
-            recvfrom(pl->socket_multidiff, &data, sizeof(data), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
-            memcpy(pl->g->b->grid, data, sizeof(&pl->g->b->grid));
+        if((GET_CODEREQ(header)) == SERVER_FULL_MATCH_STATUS){
+            MatchFullUpdateHeader *mfuh = (MatchFullUpdateHeader *) buf;
+            mfuh->num = ntohs(mfuh->num);
+            fprintf(stderr, "Received full match status with height %d and width %d\n", mfuh->height, mfuh->width);
+            memcpy(pl->g->b->grid, buf + sizeof(MatchFullUpdateHeader), DIM * DIM * sizeof(uint8_t));
+            print_board(pl->g->b);
 
             pthread_mutex_lock(&pl->mutex);
             refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
             pthread_mutex_unlock(&pl->mutex);
-        }else if((GET_CODEREQ(&header)) == SERVER_PARTIAL_MATCH_UPDATE){
-            uint16_t num;
-            recvfrom(pl->socket_multidiff, &num, sizeof(num), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
-            uint8_t count;
-            recvfrom(pl->socket_multidiff, &count, sizeof(count), 0, (struct sockaddr *) &pl->adr_udp, &difflen);
-            pl->freq = count;
+        }else if((GET_CODEREQ(header)) == SERVER_PARTIAL_MATCH_UPDATE){
+            // TODO handle
         }
-
     }
+
+    free(buf);
+}
+
+void *refresh_gameboard(void *arg){ // multicast
+    player *pl = (player *) arg;
+    refresh_gameboard_implementation(pl);
     pthread_exit(NULL);
 }
 
@@ -413,7 +425,7 @@ int main(int argc, char** args){
     pthread_mutex_init(&pl->mutex, 0);
 
     if(argc != 4){
-        printf("usage: %s <port> <address> <1:no team, 2:2team>\n", args[0]);
+        fprintf(stderr, "usage: %s <port> <address> <1:no team, 2:2team>\n", args[0]);
         return 1;
     }
 
@@ -421,11 +433,11 @@ int main(int argc, char** args){
     addr = args[2];
     pl->server_adr = args[2];
     if((pl->socket_tcp = connect_to_server(port, addr)) < 0){
-        printf("Connecting to server failed. Exiting...");
+        fprintf(stderr, "Connecting to server failed. Exiting...");
         return 1;
     }
 
-    printf("connection successful\n");
+    fprintf(stderr, "connection successful\n");
 
     if((pl->socket_multidiff = socket(AF_INET6, SOCK_DGRAM, 0)) < 0){
         perror("socket abonnement");
@@ -438,7 +450,7 @@ int main(int argc, char** args){
     }
 
     if(start_match(pl, atoi(args[3])) < 0){
-        printf("start_match failed\n");
+        fprintf(stderr, "start_match failed\n");
         return 1;
     }
 
@@ -456,10 +468,10 @@ int main(int argc, char** args){
     //     return 1;
     // }
 
-    if(pthread_create(&refresh_party, NULL, refresh_gameboard, pl)){
-        perror("thread refresh party");
-        return 1;
-    }
+    // if(pthread_create(&refresh_party, NULL, refresh_gameboard, pl)){
+    //     perror("thread refresh party");
+    //     return 1;
+    // }
     if(pthread_create(&thread_tchat_read, NULL, read_tcp_tchat, pl)){
         perror("thread read tchat");
         return 1;
@@ -469,10 +481,12 @@ int main(int argc, char** args){
         return 1;
     }
 
+    refresh_gameboard_implementation(pl);
+
     //printf("Waiting on all threads to finish...\n");
 
     pthread_join(thread_tchat_read, NULL);
-    pthread_join(refresh_party, NULL);
+    // pthread_join(refresh_party, NULL);
     pthread_join(action, NULL);
     //pthread_join(lobby, NULL);
     

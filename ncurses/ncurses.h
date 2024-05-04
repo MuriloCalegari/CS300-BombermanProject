@@ -5,7 +5,6 @@
 #include "../common/messages.h"
 
 #define MAX_VERTICAL_LINE 3
-#define DIM 25
 
 typedef enum ACTION { NONE, UP, DOWN, LEFT, RIGHT, QUIT, ENTER } ACTION;
 

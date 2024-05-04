@@ -5,6 +5,8 @@
 +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 */
 
+#define DIM 10
+
 typedef struct MessageHeader {
     uint16_t header_line;
 } MessageHeader;

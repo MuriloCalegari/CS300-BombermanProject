@@ -4,7 +4,7 @@
         {
             "label": "build client",
             "type": "shell",
-            "command": "make client",
+            "command": "make all",
             "group": {
                 "kind": "build",
                 "isDefault": true
