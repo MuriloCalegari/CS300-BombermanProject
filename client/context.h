@@ -22,4 +22,5 @@ typedef struct player {
     gameboard* g;
     int freq;
     int ready;
+    int end;
 } player;
