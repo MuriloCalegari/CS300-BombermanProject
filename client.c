@@ -15,6 +15,7 @@
 #include "client/context.h"
 #include "client/network.h"
 #include "common/util.h"
+#include <sys/fcntl.h>
 
 char* addr;
 
@@ -409,9 +410,15 @@ int main(int argc, char** args){
     pl->end = 0;
     pthread_mutex_init(&pl->mutex, 0);
 
-    if(argc != 4){
-        fprintf(stderr, "usage: %s <port> <address> <1:no team, 2:2team>\n", args[0]);
+    if(argc < 4){
+        fprintf(stderr, "usage: %s <port> <address> <1:no team, 2:2team> [OPTIONS]\n", args[0]);
+        fprintf(stderr, "OPTIONS:\n");
+        fprintf(stderr, "--debug: print debug messages to stderr.\n");
         return 1;
+    }
+
+    if(argc == 4 || (argc > 5 && strcmp(args[4], "--debug") != 0)) {
+        freopen("/dev/null", "w", stderr);
     }
 
     int port = atoi(args[1]);
