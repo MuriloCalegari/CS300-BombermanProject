@@ -9,7 +9,7 @@
 typedef enum ACTION { NONE, UP, DOWN, LEFT, RIGHT, QUIT, ENTER } ACTION;
 
 typedef struct board {
-    int grid[DIM * DIM];
+    uint8_t grid[DIM * DIM];
     int w;
     int h;
 } board;

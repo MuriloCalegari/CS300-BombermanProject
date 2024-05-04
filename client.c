@@ -253,7 +253,7 @@ void *game_control(void *arg){
         pthread_mutex_lock(&pl->mutex);
         switch(perform_action(pl->g->b, pl->g->p, a)){
             case -1: // quit
-                free_board(pl->g->b);
+                // free_board(pl->g->b);
                 curs_set(1); // Set the cursor to visible again
                 endwin(); /* End curses mode */
                 free_gameboard(pl->g);
@@ -294,7 +294,7 @@ void *before_game_control(void *arg){
         ACTION a = control(pl->g->lw);
         switch(perform_action(pl->g->b, pl->g->p, a)){
             case -1: // quit
-                free_board(pl->g->b);
+                // free_board(pl->g->b);
                 curs_set(1); // Set the cursor to visible again
                 endwin(); /* End curses mode */
                 free_gameboard(pl->g);

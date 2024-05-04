@@ -189,7 +189,7 @@ void update_latest_movement(Match *match, int player_index, int num,
   // than the current one but be aware of the overflow from NUM_MAX to 0
   uint16_t current_num = match->latest_movements[player_index].num;
 
-  if ((num > current_num) || has_overflown(current_num, num)) {
+  if (num == 0 || num > current_num || has_overflown(current_num, num)) {
     VERBOSE_PRINTF(
         "Num is bigger than our previously stored num or it has overflown\n");
     match->latest_movements[player_index].num = num;
@@ -286,14 +286,19 @@ int move_player(Match *match, int player_index, int action,
     return OCCUPIED_CELL;
   }
 
+  VERBOSE_PRINTF("Player %d is moving from %d to %d\n", player_position,
+                 player_position, new_position);
+
   // If a player has just dropped a bomb, then he still occupies that one cell
   // before he moves, so we only update that old cell to an EMPTY_CELL if there
   // was no bomb there before
   if (match->grid[player_position] != BOMB) {
     // TODO need to account for EXPLODED_BY_BOMB,
     // probably use a bitmap of walls that have been exploded
+    VERBOSE_PRINTF("Old position is not a bomb, setting as EMPTY_CELL\n");
     match->grid[player_position] = EMPTY_CELL;
   }
+
   match->grid[new_position] = ENCODE_PLAYER(player_index);
 
   match->players_current_position[player_index] = new_position;
