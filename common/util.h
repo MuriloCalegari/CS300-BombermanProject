@@ -4,6 +4,12 @@
     #define DEBUG_PRINTF(...) do {} while (0)
 #endif
 
+#ifdef VERBOSE
+    #define VERBOSE_PRINTF(...) printf("DEBUG: " __VA_ARGS__)
+#else
+    #define VERBOSE_PRINTF(...) do {} while (0)
+#endif
+
 #ifdef _WIN64
    //define something for Windows (64-bit)
 #elif _WIN32

@@ -189,7 +189,7 @@ void update_latest_movement(Match *match, int player_index, int num,
   uint16_t current_num = match->latest_movements[player_index].num;
 
   if ((num > current_num) || has_overflown(current_num, num)) {
-    printf(
+    VERBOSE_PRINTF(
         "Num is bigger than our previously stored num or it has overflown\n");
     match->latest_movements[player_index].num = num;
     match->latest_movements[player_index].action = action;
