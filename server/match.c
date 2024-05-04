@@ -286,7 +286,7 @@ int move_player(Match *match, int player_index, int action,
     return OCCUPIED_CELL;
   }
 
-  VERBOSE_PRINTF("Player %d is moving from %d to %d\n", player_position,
+  VERBOSE_PRINTF("Player %d is moving from %d to %d\n", player_index,
                  player_position, new_position);
 
   // If a player has just dropped a bomb, then he still occupies that one cell
