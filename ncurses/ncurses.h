@@ -43,7 +43,7 @@ int get_grid(board* b, int x, int y);
 void set_grid(board* b, int x, int y, int v);
 void refresh_game(board* b, line_w* lw, line_r* lr);
 ACTION control(line_w* l);
-int perform_action(board* b, pos* p, ACTION a);
+int perform_action(ACTION a);
 gameboard* create_board();
 void free_gameboard(gameboard *g);
 void update_grid(board* b, char *up);

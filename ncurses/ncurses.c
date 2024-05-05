@@ -117,8 +117,7 @@ void refresh_game(board* b, line_w* lw, line_r* lr) {
             if(x < lr->len[i]){
                 mvaddch(y, x, lr->data[i][x]);
             }else{
-               mvaddch(y, x, '+');
-                // mvaddch(y, x, ' ');
+                mvaddch(y, x, ' ');
             }
         }
         i++;
@@ -126,8 +125,7 @@ void refresh_game(board* b, line_w* lw, line_r* lr) {
     // tchat write
     for (x = 0; x < b->w; x++) {
         if (x >= SIZE_MAX_MESSAGE || x >= lw->cursor)
-            mvaddch(b->h-1, x, 'x');
-            // mvaddch(b->h-1, x, ' ');
+            mvaddch(b->h-1, x, ' ');
         else
             mvaddch(b->h-1, x, lw->data[x]);
     }
@@ -173,7 +171,7 @@ ACTION control(line_w* l) {
     return a;
 }
 
-int perform_action(board* b, pos* p, ACTION a) {
+int perform_action(ACTION a) {
     int res = 0;
     switch (a) {
         case LEFT:

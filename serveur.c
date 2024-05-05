@@ -17,7 +17,7 @@
 #define WIDTH DIM
 #define MULTICAST_ADDRESS "ff02::1"
 
-int current_udp_port = 10000; // Used for multicast groups
+int current_udp_port = 12345; // Used for multicast groups
 int server_tcp_port;
 int freq;
 
@@ -217,30 +217,33 @@ void send_message(Match *match, int player_index, int mode){
   TChatHeader msg;
   uint8_t len;
   read_loop(match->sockets_tcp[player_index], &len, sizeof(uint8_t), 0);
-  uint8_t data[len];
-  read_loop(match->sockets_tcp[player_index], data, len, 0);
+  char data[len];
+  read_loop(match->sockets_tcp[player_index], &data, len+1, 0);
   msg.data_len = len;
-  
+  // fprintf(stderr, "taille %d,message:%s\n",len,&data[1]);
   SET_ID(&msg.header, match->players[player_index]);
 
   if(mode == T_CHAT_ALL_PLAYERS){
-    // TODO FIX This will break the loop before intended
-    for(int i=0; (i<match->players_count) && (i!=player_index); i++){
-      SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_ALL_PLAYERS);
-      msg.header.header_line = htons(msg.header.header_line);
+    for(int i=0; i<match->players_count; i++){
+      if(i!=player_index){
+        SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_ALL_PLAYERS);
+        msg.header.header_line = htons(msg.header.header_line);
 
-      write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
-      write_loop(match->sockets_tcp[i], &data, len, 0);
+        write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
+        write_loop(match->sockets_tcp[i], &data[1], len, 0);
+        fprintf(stderr, "taille %d,message:%s\n",len,&data[1]);
+      }
     }
   }else {
-    // TODO FIX This will break the loop before intended
-    for(int i=0; (i<match->players_count) && (i!=player_index) && (match->players_team[i]==match->players_team[player_index]); i++){
-      SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_TEAM);
-      SET_EQ(&msg.header, match->players_team[player_index]);
-      msg.header.header_line = htons(msg.header.header_line);
+    for(int i=0; (i<match->players_count) && (match->players_team[i]==match->players_team[player_index]); i++){
+      if(i!=player_index){
+        SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_TEAM);
+        SET_EQ(&msg.header, match->players_team[player_index]);
+        msg.header.header_line = htons(msg.header.header_line);
 
-      write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
-      write_loop(match->sockets_tcp[i], &data, len, 0);
+        write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
+        write_loop(match->sockets_tcp[i], &data[1], len, 0);
+      }
     }
   }
 }
@@ -272,9 +275,9 @@ void *tcp_player_handler(void *arg) {
         pthread_mutex_unlock(&match->mutex);
         break;
       case T_CHAT_ALL_PLAYERS:
-//        pthread_mutex_lock(&match->mutex); TODO DELETE
+        pthread_mutex_lock(&match->mutex); 
         send_message(match, player_index, T_CHAT_ALL_PLAYERS);
-//        pthread_mutex_unlock(&match->mutex); TODO DELETE
+        pthread_mutex_unlock(&match->mutex); 
         break;
       case T_CHAT_TEAM:
 //        pthread_mutex_lock(&match->mutex); TODO DELETE

@@ -180,11 +180,12 @@ int start_match(player *pl, int mode) {
     return 0;
 }
 
-int tchat_message(player *pl, char *data){
+int tchat_message(player *pl){
     TChatHeader message;
     memset(&message, 0, sizeof(message));
+    char *data = pl->g->lw->data;
 
-    if(strcmp(&data[0],"/") == 0 && strcmp(&data[0],"t") == 0 ) { // start message with "/t" for team tchat
+    if(strcmp(&data[0],"/") == 0 && strcmp(&data[1],"t") == 0 ) { // start message with "/t" for team tchat
         SET_CODEREQ(&message.header, T_CHAT_TEAM);
     }else{
         SET_CODEREQ(&message.header, T_CHAT_ALL_PLAYERS);
@@ -194,21 +195,24 @@ int tchat_message(player *pl, char *data){
     message.header.header_line = htons(message.header.header_line);
 
     message.data_len = strlen(data);
-    char res[strlen(data)];
+    char res[message.data_len];
     int i;
     for(i=0; i<message.data_len; i++){
-        res[i] = data[i];
+        res[i] = pl->g->lw->data[i];
     }
     res[i+1] = 0;
-
+    //fprintf(stderr, "msg:%s\n", res);
     if(write_loop(pl->socket_tcp, &message, sizeof(message), 0) <= 0){
         perror("tchat_message, send");
         return -1;
     }
-    if(write_loop(pl->socket_tcp, &res, strlen(data), 0) <= 0){
+    if(write_loop(pl->socket_tcp, res, message.data_len, 0) <= 0){
         perror("tchat_message, send");
         return -1;
     }
+
+    pl->g->lw->cursor=0;
+    memset(pl->g->lw->data, 0, SIZE_MAX_MESSAGE);
     return 0;
 }
 
@@ -251,7 +255,7 @@ void *game_control(void *arg){
     while(/*pl->ready == 1 && */ pl->end == 0){
         ACTION a = control(pl->g->lw);
         pthread_mutex_lock(&pl->mutex);
-        switch(perform_action(pl->g->b, pl->g->p, a)){
+        switch(perform_action(a)){
             case -1: // quit
                 // free_board(pl->g->b);
                 curs_set(1); // Set the cursor to visible again
@@ -261,9 +265,7 @@ void *game_control(void *arg){
                 pthread_exit(NULL);
             case 1:
                 //if(pl->g->lw->cursor > 0){
-                    tchat_message(pl, pl->g->lw->data);
-                    pl->g->lw->cursor=0;
-                    memset(pl->g->lw->data, 0, SIZE_MAX_MESSAGE);
+                    tchat_message(pl);
                 //}
                 break;
             case 2: //left
@@ -279,37 +281,11 @@ void *game_control(void *arg){
                 udp_message(pl, MOVE_SOUTH);
                 break;
             case 6: //bomb
-            // TODO
+                udp_message(pl, DROP_BOMB);
+                break;
             default: break;
         }
         pthread_mutex_unlock(&pl->mutex);
-    }
-    pthread_exit(NULL);
-}
-
-
-void *before_game_control(void *arg){
-    player *pl = (player *)arg;
-    while(pl->ready == 0){
-        ACTION a = control(pl->g->lw);
-        switch(perform_action(pl->g->b, pl->g->p, a)){
-            case -1: // quit
-                // free_board(pl->g->b);
-                curs_set(1); // Set the cursor to visible again
-                endwin(); /* End curses mode */
-                free_gameboard(pl->g);
-                break;
-            case 1:
-                if(pl->g->lw->cursor > 0){
-                    tchat_message(pl, pl->g->lw->data);
-                    pl->g->lw->cursor=0;
-                    memset(pl->g->lw->data, 0, SIZE_MAX_MESSAGE);
-                }
-                break;
-            default: break;
-        }
-        usleep(30*1000);
-        refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
     }
     pthread_exit(NULL);
 }
@@ -333,6 +309,8 @@ void *read_tcp_tchat(void* arg){
             perror("read_tcp, recv");
         }
 
+        //fprintf(stderr, "len:%d, msg:%s\n", resp.data_len,data);
+
         //update tchat
         switch(pl->g->lr->nb_line){
             case 0:
@@ -352,11 +330,13 @@ void *read_tcp_tchat(void* arg){
                 break;
             default:
                 memset(&pl->g->lr->data[0], 0, SIZE_MAX_MESSAGE); // clear source to get a new data
-                memmove(&pl->g->lr->data[0], pl->g->lr->data[1], sizeof(pl->g->lr->data[0]));
+                memmove(&pl->g->lr->data[0], pl->g->lr->data[1], pl->g->lr->len[1]);
                 pl->g->lr->len[0] = pl->g->lr->len[1];
+
                 memset(&pl->g->lr->data[1], 0, SIZE_MAX_MESSAGE);
-                memmove(&pl->g->lr->data[1], pl->g->lr->data[2], sizeof(pl->g->lr->data[0]));
+                memmove(&pl->g->lr->data[1], pl->g->lr->data[2], pl->g->lr->len[2]);
                 pl->g->lr->len[1] = pl->g->lr->len[2];
+
                 memset(&pl->g->lr->data[2], 0, SIZE_MAX_MESSAGE);
                 memcpy(&pl->g->lr->data[2], data, sizeof(data));
                 pl->g->lr->len[2] = resp.data_len;
@@ -379,7 +359,7 @@ void print_board(board* b) {
 
 void refresh_gameboard_implementation(player *pl) {
     int buf_size = sizeof(MatchFullUpdateHeader) + (DIM * DIM * sizeof(uint8_t));
-    fprintf(stderr, "Mallocing buffer of size %d\n", buf_size);
+    //fprintf(stderr, "Mallocing buffer of size %d\n", buf_size);
     char *buf = malloc(buf_size);
     // char *grid_data = malloc(pl->g->b->h * pl->g->b->w * sizeof(uint8_t));
     MessageHeader *header;
@@ -387,23 +367,28 @@ void refresh_gameboard_implementation(player *pl) {
         recvfrom(pl->socket_multidiff, buf, buf_size, 0, NULL, 0);
         header = (MessageHeader *) buf;
         header->header_line = ntohs(header->header_line);
-        fprintf(stderr, "Received header:\n");
-        print_header(header);
+        //fprintf(stderr, "Received header:\n");
+        //print_header(header);
 
         pl->ready = 1; // unlock control player
 
         if((GET_CODEREQ(header)) == SERVER_FULL_MATCH_STATUS){
             MatchFullUpdateHeader *mfuh = (MatchFullUpdateHeader *) buf;
             mfuh->num = ntohs(mfuh->num);
-            fprintf(stderr, "Received full match status with height %d and width %d\n", mfuh->height, mfuh->width);
+            //fprintf(stderr, "Received full match status with height %d and width %d\n", mfuh->height, mfuh->width);
             memcpy(pl->g->b->grid, buf + sizeof(MatchFullUpdateHeader), DIM * DIM * sizeof(uint8_t));
-            print_board(pl->g->b);
+            //print_board(pl->g->b);
 
             pthread_mutex_lock(&pl->mutex);
             refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
             pthread_mutex_unlock(&pl->mutex);
         }else if((GET_CODEREQ(header)) == SERVER_PARTIAL_MATCH_UPDATE){
-            // TODO handle
+            
+            // set_grid(pl->g->b, atoi(&buf[5]), atoi(&buf[4]), atoi(&buf[6]));
+
+            // pthread_mutex_lock(&pl->mutex);
+            // refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
+            // pthread_mutex_unlock(&pl->mutex);
         }
     }
 
@@ -455,23 +440,10 @@ int main(int argc, char** args){
     }
 
     pthread_t thread_tchat_read;
-    pthread_t refresh_party;
     pthread_t action;
-    //pthread_t lobby;
 
     pl->g = create_board();
-    refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
-    //endwin();
 
-    // if(pthread_create(&lobby, NULL, before_game_control, pl)){
-    //     perror("thread refresh party");
-    //     return 1;
-    // }
-
-    // if(pthread_create(&refresh_party, NULL, refresh_gameboard, pl)){
-    //     perror("thread refresh party");
-    //     return 1;
-    // }
     if(pthread_create(&thread_tchat_read, NULL, read_tcp_tchat, pl)){
         perror("thread read tchat");
         return 1;
@@ -486,9 +458,7 @@ int main(int argc, char** args){
     //printf("Waiting on all threads to finish...\n");
 
     pthread_join(thread_tchat_read, NULL);
-    // pthread_join(refresh_party, NULL);
     pthread_join(action, NULL);
-    //pthread_join(lobby, NULL);
     
     close(pl->socket_tcp);
     close(pl->socket_multidiff);
