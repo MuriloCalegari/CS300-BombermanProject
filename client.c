@@ -253,7 +253,6 @@ void *game_control(void *arg){
                 // free_board(pl->g->b); // TODO can we clean the code from commented out expressions ?
                 curs_set(1); // Set the cursor to visible again
                 endwin(); /* End curses mode */
-                free_gameboard(pl->g);
                 pl->end = 1;
                 pthread_exit(NULL);
             case ENTER:
@@ -338,9 +337,6 @@ void *read_tcp_tchat(void* arg){
         pthread_mutex_unlock(&pl->mutex);
     }
 
-    // TODO the code below is unreachable since the loop above will never break.
-    // We need to be able to break the loop and finish the thread gracefully when the game ends.
-    // Maybe using p->end? Or then consider using pthread_cancel (see usage in server code)
     pthread_exit(NULL);
 }
 
@@ -378,7 +374,7 @@ void refresh_gameboard_implementation(player *pl) {
             pthread_mutex_lock(&pl->mutex);
             refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
             pthread_mutex_unlock(&pl->mutex);
-        }else if((GET_CODEREQ(header)) == SERVER_PARTIAL_MATCH_UPDATE){
+        } else if((GET_CODEREQ(header)) == SERVER_PARTIAL_MATCH_UPDATE){
             
             // set_grid(pl->g->b, atoi(&buf[5]), atoi(&buf[4]), atoi(&buf[6]));
 
@@ -461,7 +457,8 @@ int main(int argc, char** args){
 
     refresh_gameboard_implementation(pl);
 
-    //printf("Waiting on all threads to finish...\n");
+    printf("Game has ended. Waiting on other threads to finish...\n");
+    pthread_cancel(thread_tchat_read);
 
     pthread_join(thread_tchat_read, NULL);
     pthread_join(action, NULL);
@@ -469,6 +466,7 @@ int main(int argc, char** args){
     close(pl->socket_tcp);
     close(pl->socket_multidiff);
     close(pl->socket_udp);
+    free_gameboard(pl->g);
     free(pl);
 
     return 0;

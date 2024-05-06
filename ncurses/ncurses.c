@@ -40,6 +40,7 @@ void free_gameboard(gameboard *g){
     free(g->lr);
     free(g->lw);
     free(g->p);
+    free(g);
 }
 
 void setup_board(board* board) {
@@ -54,7 +55,7 @@ void setup_board(board* board) {
 }
 
 void free_board(board* board) {
-    free(board->grid);
+//    free(board->grid); // TODO uncomment when you allocate memory for the grid dynamically (with malloc and varible height and width)
     free(board);
 }
 
