@@ -9,13 +9,11 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <ncurses.h>
-#include <string.h>
 #include <net/if.h>
 #include "ncurses/ncurses.h"
 #include "client/context.h"
 #include "client/network.h"
 #include "common/util.h"
-#include <sys/fcntl.h>
 
 char* addr;
 
@@ -45,8 +43,8 @@ int connect_to_server(int port, char* addr){
     return sockfd;
 }
 
-void print_header(MessageHeader* header){
-    fprintf(stderr, "MessageHeader: CODEREQ(%d) ID(%d) EQ(%d)\n",
+void print_header(LOG_LEVEL level, MessageHeader* header){
+    print_log(level, "MessageHeader: CODEREQ(%d) ID(%d) EQ(%d)\n",
         GET_CODEREQ(header), GET_ID(header), GET_EQ(header));
 }
 
@@ -61,8 +59,8 @@ int start_match(player *pl, int mode) {
     SET_CODEREQ(&header, pl->mode);
     header.header_line = htons(header.header_line);
 
-    fprintf(stderr, "\nStarting match with server. Sending header:\n");
-    print_header(&header);
+    print_log(LOG_INFO, "Starting match with server. Sending header:\n");
+    print_header(LOG_INFO, &header);
 
     if(send(pl->socket_tcp, &header, sizeof(header), 0) == -1){
         perror("start_match, send");
@@ -73,7 +71,7 @@ int start_match(player *pl, int mode) {
     NewMatchMessage resp;
     memset(&resp, 0, sizeof(resp));
 
-    fprintf(stderr, "Waiting for server response...\n");
+    print_log(LOG_INFO, "Waiting for server response...\n");
     if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0){
         perror("start_match, recv");
         return -1;
@@ -82,10 +80,10 @@ int start_match(player *pl, int mode) {
     // codereq check
     resp.header.header_line = ntohs(resp.header.header_line); // convert
     int test = GET_CODEREQ(&resp.header);
-    fprintf(stderr, "codereq %d\n", test);
+    print_log(LOG_DEBUG, "Received codereq %d from server\n", test);
     if(((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_4_OPPONENTS && mode == MODE_NO_TEAM) ||
     ((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_2_TEAMS && mode == MODE_2_TEAM)) {
-        perror("start_match, error recv codereq");
+        print_log(LOG_ERROR, "start_match, error recv codereq");
         return -1;
     }
 
@@ -114,7 +112,7 @@ int start_match(player *pl, int mode) {
     adr.sin6_addr = in6addr_any;
     adr.sin6_port = htons(pl->port_multidiff);
 
-    fprintf(stderr, "Binding UDP socket to port %d\n", pl->port_multidiff);
+    print_log(LOG_INFO, "Binding UDP socket to port %d\n", pl->port_multidiff);
     if(bind(pl->socket_multidiff, (struct sockaddr*) &adr, sizeof(adr))) {
         perror("echec de bind");
         close(pl->socket_udp);
@@ -127,26 +125,20 @@ int start_match(player *pl, int mode) {
     
     if(strcmp(addr, "localhost") == 0 || strcmp(addr, "::1") == 0) {
         #ifdef TARGET_OS_OSX
-        fprintf(stderr, "Running on MacOS with localhost, using if_nametoindex for loopback interface\n");
+        print_log(LOG_INFO, "Running on MacOS with localhost, using if_nametoindex for loopback interface\n");
         ifindex = if_nametoindex ("lo0");
         if(ifindex == 0)
             perror("if_nametoindex");
         #endif
         #ifdef __linux
-        fprintf(stderr, "Running on Linux with localhost, using eth0 interface\n");
+        print_log(LOG_INFO, "Running on Linux with localhost, using eth0 interface\n");
         ifindex = if_nametoindex ("eth0");
         if(ifindex == 0)
             perror("if_nametoindex");
         #endif
     }
 
-    // /* subscribe to the multicast group */
-    // struct ipv6_mreq group;
-
-    // Use inet_ntop to convert the address to a human-readable string
-    // char addr_str[INET6_ADDRSTRLEN];
-    // inet_ntop(AF_INET6, &group.ipv6mr_multiaddr, addr_str, INET6_ADDRSTRLEN);
-    // fprintf(stderr, "Joining multicast group address: %s\n", addr_str);
+    /* Subscribe to the multicast group */
 
     struct ipv6_mreq group;
     memcpy(&group.ipv6mr_multiaddr.s6_addr, pl->adr_udp, sizeof(pl->adr_udp));
@@ -202,7 +194,7 @@ int tchat_message(player *pl){
         res[i] = pl->g->lw->data[i];
     }
     res[i+1] = 0;
-    //fprintf(stderr, "msg:%s\n", res);
+    print_log(LOG_DEBUG, "Sending tchat message: %s\n", res);
     if(write_loop(pl->socket_tcp, &message, sizeof(message), 0) <= 0){
         perror("tchat_message, send");
         return -1;
@@ -237,8 +229,8 @@ int udp_message(player *pl, int action){
     struct sockaddr_in6 adr;
     memset(&adr, 0, sizeof(adr));
     adr.sin6_family = AF_INET6;
-    // memcpy(&adr.sin6_addr, pl->adr_udp, sizeof(pl->adr_udp));
-    inet_pton(AF_INET6, "::1", &adr.sin6_addr);
+    // memcpy(&adr.sin6_addr, pl->adr_udp, sizeof(pl->adr_udp)); // TODO can we clean the code from commented out expressions ?
+    inet_pton(AF_INET6, "::1", &adr.sin6_addr); // TODO dinamically get this from args
     adr.sin6_port = htons(pl->port_udp);
 
     int send = sendto(pl->socket_udp, &buffer, sizeof(buffer), 0, (struct sockaddr *)&adr, sizeof(adr));
@@ -253,35 +245,35 @@ int udp_message(player *pl, int action){
 void *game_control(void *arg){
     player *pl = (player *)arg;
     pl->id = 1;
-    while(/*pl->ready == 1 && */ pl->end == 0){
+    while(/*pl->ready == 1 && */ pl->end == 0){ // TODO can we clean the code from commented out expressions ?
         ACTION a = control(pl->g->lw);
         pthread_mutex_lock(&pl->mutex);
-        switch(perform_action(a)){
-            case -1: // quit
-                // free_board(pl->g->b);
+        switch(a){
+            case QUIT: // quit
+                // free_board(pl->g->b); // TODO can we clean the code from commented out expressions ?
                 curs_set(1); // Set the cursor to visible again
                 endwin(); /* End curses mode */
                 free_gameboard(pl->g);
                 pl->end = 1;
                 pthread_exit(NULL);
-            case 1:
-                //if(pl->g->lw->cursor > 0){
+            case ENTER:
+                //if(pl->g->lw->cursor > 0){ // TODO can we clean the code from commented out expressions ?
                     tchat_message(pl);
                 //}
                 break;
-            case 2: //left
+            case LEFT: //left
                 udp_message(pl, MOVE_WEST);
                 break;
-            case 3: //right
+            case RIGHT: //right
                 udp_message(pl, MOVE_EAST);
                 break;
-            case 4: //up
+            case UP: //up
                 udp_message(pl, MOVE_NORTH);
                 break;
-            case 5: //down
+            case DOWN: //down
                 udp_message(pl, MOVE_SOUTH);
                 break;
-            case 6: //bomb
+            case BOMB_ACTION: // bomb TODO need to assign a key to this action in control()
                 udp_message(pl, DROP_BOMB);
                 break;
             default: break;
@@ -310,7 +302,7 @@ void *read_tcp_tchat(void* arg){
             perror("read_tcp, recv");
         }
 
-        //fprintf(stderr, "len:%d, msg:%s\n", resp.data_len,data);
+        print_log(LOG_DEBUG, "Received tchat message of length %d: %s\n", resp.data_len, data);
 
         //update tchat
         switch(pl->g->lr->nb_line){
@@ -345,40 +337,43 @@ void *read_tcp_tchat(void* arg){
         }
         pthread_mutex_unlock(&pl->mutex);
     }
+
+    // TODO the code below is unreachable since the loop above will never break.
+    // We need to be able to break the loop and finish the thread gracefully when the game ends.
+    // Maybe using p->end? Or then consider using pthread_cancel (see usage in server code)
     pthread_exit(NULL);
 }
 
-void print_board(board* b) {
+void print_board(LOG_LEVEL level, board* b) {
     // Print board to stderr
     for(int i = 0; i < DIM; i++) {
         for(int j = 0; j < DIM; j++) {
-            fprintf(stderr, "%d ", get_grid(b, j, i));
+            print_log_prefixed(level, 0, "%d ", get_grid(b, j, i));
         }
-        fprintf(stderr, "\n");
+        print_log_prefixed(level, 0, "\n");
     }
 }
 
 void refresh_gameboard_implementation(player *pl) {
     int buf_size = sizeof(MatchFullUpdateHeader) + (DIM * DIM * sizeof(uint8_t));
-    //fprintf(stderr, "Mallocing buffer of size %d\n", buf_size);
+    print_log(LOG_DEBUG, "Mallocing buffer of size %d for UDP gameboard updates\n", buf_size);
     char *buf = malloc(buf_size);
-    // char *grid_data = malloc(pl->g->b->h * pl->g->b->w * sizeof(uint8_t));
     MessageHeader *header;
     while(pl->end == 0){    
         recvfrom(pl->socket_multidiff, buf, buf_size, 0, NULL, 0);
         header = (MessageHeader *) buf;
         header->header_line = ntohs(header->header_line);
-        //fprintf(stderr, "Received header:\n");
-        //print_header(header);
+        print_log(LOG_VERBOSE, "Received header on UDP:\n");
+        print_header(LOG_VERBOSE, header);
 
         pl->ready = 1; // unlock control player
 
         if((GET_CODEREQ(header)) == SERVER_FULL_MATCH_STATUS){
             MatchFullUpdateHeader *mfuh = (MatchFullUpdateHeader *) buf;
             mfuh->num = ntohs(mfuh->num);
-            //fprintf(stderr, "Received full match status with height %d and width %d\n", mfuh->height, mfuh->width);
+            print_log(LOG_VERBOSE, "Received full match status with height %d and width %d\n", mfuh->height, mfuh->width);
             memcpy(pl->g->b->grid, buf + sizeof(MatchFullUpdateHeader), DIM * DIM * sizeof(uint8_t));
-            //print_board(pl->g->b);
+            print_board(LOG_VERBOSE, pl->g->b);
 
             pthread_mutex_lock(&pl->mutex);
             refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
@@ -411,25 +406,29 @@ int main(int argc, char** args){
     pthread_mutex_init(&pl->mutex, 0);
 
     if(argc < 4){
-        fprintf(stderr, "usage: %s <port> <address> <1:no team, 2:2team> [OPTIONS]\n", args[0]);
-        fprintf(stderr, "OPTIONS:\n");
-        fprintf(stderr, "--debug: print debug messages to stderr.\n");
+        print_log(LOG_ERROR, "usage: %s <port> <address> <1:no team, 2:2team> [OPTIONS]\n", args[0]);
+        print_log(LOG_ERROR, "OPTIONS:\n");
+        print_log(LOG_ERROR, "--debug: print debug messages to stderr.\n");
         return 1;
     }
 
-    if(argc == 4 || (argc > 5 && strcmp(args[4], "--debug") != 0)) {
+    if(argc == 4 || (argc >= 5 && strcmp(args[4], "--debug") != 0)) {
         freopen("/dev/null", "w", stderr);
+    } else if (argc >= 5 && strcmp(args[4], "--debug") == 0) {
+        // Open (or create) new file on current directory named arg[0]_debug:
+        // This will be used to store debug messages.
+        connect_stderr_to_debug_file(args[0]);
     }
 
     int port = atoi(args[1]);
     addr = args[2];
     pl->server_adr = args[2];
     if((pl->socket_tcp = connect_to_server(port, addr)) < 0){
-        fprintf(stderr, "Connecting to server failed. Exiting...");
+        print_log(LOG_ERROR, "Connecting to server failed. Exiting...");
         return 1;
     }
 
-    fprintf(stderr, "connection successful\n");
+    print_log(LOG_INFO, "connection successful\n");
 
     if((pl->socket_multidiff = socket(AF_INET6, SOCK_DGRAM, 0)) < 0){
         perror("socket abonnement");
@@ -442,7 +441,7 @@ int main(int argc, char** args){
     }
 
     if(start_match(pl, atoi(args[3])) < 0){
-        fprintf(stderr, "start_match failed\n");
+        print_log(LOG_ERROR, "start_match failed\n");
         return 1;
     }
 

@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <net/if.h>
+#include <stdarg.h>
 #include "util.h"
 
 pthread_t *launch_thread(void *(*start_routine)(void *), void *arg) {
@@ -61,7 +62,7 @@ int write_loop_udp(int fd, void * src, int n, struct sockaddr_in6 * dest_addr, s
       char str[INET6_ADDRSTRLEN];
       inet_ntop(AF_INET6, &(dest_addr->sin6_addr), str, INET6_ADDRSTRLEN);
       printf("Address: %s\n", str);
-  
+
       return -1;
     } else {
       // #ifdef VERBOSE
@@ -77,4 +78,79 @@ int write_loop_udp(int fd, void * src, int n, struct sockaddr_in6 * dest_addr, s
   }
 
   return sent;
+}
+
+void vprint_log_prefixed(const LOG_LEVEL level, int should_print_prefix, const char *message, va_list args) {
+  switch(level) {
+  case LOG_VERBOSE:
+    #ifdef VERBOSE
+    if(should_print_prefix) {
+      fprintf(stderr, "VERBOSE: ");
+    }
+    vfprintf(stderr, message, args);
+    fflush(stderr);
+    #endif
+    break;
+  case LOG_DEBUG:
+    #if defined(VERBOSE) || defined(DEBUG)
+    if(should_print_prefix) {
+      fprintf(stderr, "DEBUG: ");
+    }
+    vfprintf(stderr, message, args);
+    fflush(stderr);
+    #endif
+    break;
+  case LOG_INFO:
+    #if defined(VERBOSE) || defined(DEBUG) || defined(INFO)
+    if(should_print_prefix) {
+      fprintf(stderr, "INFO: ");
+    }
+    vfprintf(stderr, message, args);
+    fflush(stderr);
+    #endif
+    break;
+  case LOG_WARNING:
+    #if defined(VERBOSE) || defined(DEBUG) || defined(INFO) || defined(WARNING)
+    if(should_print_prefix) {
+      fprintf(stderr, "WARNING: ");
+    }
+    vfprintf(stderr, message, args);
+    fflush(stderr);
+    #endif
+    break;
+  case LOG_ERROR:
+    if (should_print_prefix) {
+      fprintf(stderr, "ERROR: ");
+      vfprintf(stderr, message, args);
+      fflush(stderr);
+    }
+    break;
+  }
+}
+
+void print_log_prefixed(const LOG_LEVEL level, int should_print_prefix, const char *message, ...) {
+  va_list args;
+  va_start(args, message);
+
+  vprint_log_prefixed(level, should_print_prefix, message, args);
+
+  va_end(args);
+}
+
+void print_log(const LOG_LEVEL level, const char *message, ...) {
+  va_list args;
+  va_start(args, message);
+
+  vprint_log_prefixed(level, 1, message, args);
+
+  va_end(args);
+}
+
+void connect_stderr_to_debug_file(char *program_name) {
+  char *suffix = "_log.txt";
+  char *filename = malloc(strlen(program_name) + strlen(suffix) + 1);
+
+  sprintf(filename, "%s%s", program_name, suffix);
+
+  freopen(filename, "w", stderr);
 }

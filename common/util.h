@@ -41,3 +41,16 @@ int read_loop(int fd, void * dst, int n, int flags);
 int write_loop(int fd, void * src, int n, int flags);
 int write_loop_udp(int fd, void * src, int n, struct sockaddr_in6 * dest_addr, socklen_t dest_addr_len);
 int determine_if_index();
+
+typedef enum LOG_LEVEL {
+    LOG_VERBOSE,
+    LOG_DEBUG,
+    LOG_INFO,
+    LOG_WARNING,
+    LOG_ERROR
+} LOG_LEVEL;
+
+void print_log(LOG_LEVEL level, const char *format, ...);
+
+void connect_stderr_to_debug_file(char *program_name);
+void print_log_prefixed(const LOG_LEVEL level, int should_print_prefix, const char *message, ...);

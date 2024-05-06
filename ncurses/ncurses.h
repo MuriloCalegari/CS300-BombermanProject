@@ -6,7 +6,7 @@
 
 #define MAX_VERTICAL_LINE 3
 
-typedef enum ACTION { NONE, UP, DOWN, LEFT, RIGHT, QUIT, ENTER } ACTION;
+typedef enum ACTION { NONE, UP, DOWN, LEFT, RIGHT, QUIT, ENTER, BOMB_ACTION} ACTION;
 
 typedef struct board {
     uint8_t grid[DIM * DIM];

@@ -307,7 +307,7 @@ void *match_handler(void *arg) {
         || (GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_2_TEAMS) {
           printf("Received invalid CODEREQ %d on UDP port. Ignoring...\n", GET_CODEREQ(&action_message.message_header));
           continue;
-    };
+    }
 
     handle_action_message(match, action_message);
   }
