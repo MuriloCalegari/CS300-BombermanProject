@@ -351,7 +351,7 @@ void print_board(LOG_LEVEL level, board* b) {
 }
 
 void refresh_gameboard_implementation(player *pl) {
-    int buf_size = sizeof(MatchFullUpdateHeader) + (DIM * DIM * sizeof(uint8_t));
+    int buf_size = sizeof(MatchFullUpdateHeader) + (DIM * DIM * sizeof(uint8_t) * 3);
     print_log(LOG_DEBUG, "Mallocing buffer of size %d for UDP gameboard updates\n", buf_size);
     char *buf = malloc(buf_size);
     MessageHeader *header;
@@ -363,7 +363,6 @@ void refresh_gameboard_implementation(player *pl) {
         print_header(LOG_VERBOSE, header);
 
         pl->ready = 1; // unlock control player
-
         if((GET_CODEREQ(header)) == SERVER_FULL_MATCH_STATUS){
             MatchFullUpdateHeader *mfuh = (MatchFullUpdateHeader *) buf;
             mfuh->num = ntohs(mfuh->num);
@@ -375,12 +374,20 @@ void refresh_gameboard_implementation(player *pl) {
             refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
             pthread_mutex_unlock(&pl->mutex);
         } else if((GET_CODEREQ(header)) == SERVER_PARTIAL_MATCH_UPDATE){
-            
-            // set_grid(pl->g->b, atoi(&buf[5]), atoi(&buf[4]), atoi(&buf[6]));
 
-            // pthread_mutex_lock(&pl->mutex);
-            // refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
-            // pthread_mutex_unlock(&pl->mutex);
+            MatchUpdateHeader *muh = (MatchUpdateHeader *) buf;
+            muh->num = ntohs(muh->num);
+            int count = muh->count;
+            CellStatusUpdate *current_cell = (CellStatusUpdate *)(buf + sizeof(MatchUpdateHeader));
+
+            for(int i=0; i<count; i++){
+                set_grid(pl->g->b, current_cell->col, current_cell->row, current_cell->status);
+                current_cell++;
+            }
+
+            pthread_mutex_lock(&pl->mutex);
+            refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
+            pthread_mutex_unlock(&pl->mutex);
         }
     }
 
