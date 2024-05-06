@@ -162,6 +162,8 @@ ACTION control(line_w* l) {
             break;
         case '\n': 
             a = ENTER; break;
+        case ' ': // SPACE
+            a = BOMB_ACTION; break;
         default:
             if (prev_c >= ' ' && prev_c <= '~' && l->cursor < SIZE_MAX_MESSAGE)
                 l->data[(l->cursor)++] = prev_c;

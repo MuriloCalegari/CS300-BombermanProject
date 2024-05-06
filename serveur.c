@@ -17,7 +17,7 @@
 #define WIDTH DIM
 #define MULTICAST_ADDRESS "ff02::1"
 
-int current_udp_port = 12345; // Used for multicast groups
+int current_udp_port = 10123; // Used for multicast groups
 int server_tcp_port;
 int freq;
 
@@ -318,6 +318,7 @@ void *match_handler(void *arg) {
 void *match_updater_thread_handler(void *arg) {
   MatchHandlerThreadContext *context = (MatchHandlerThreadContext *) arg;
   Match *match = context->match;
+  pthread_t *thread = match->match_updater_thread;
 
   pthread_cleanup_push(clean_arg, arg);
 
@@ -342,6 +343,9 @@ void *match_updater_thread_handler(void *arg) {
       break;
     }
   }
+
+  print_log(LOG_DEBUG, "Freeing match_updater_thread\n");
+  free(thread);
 
   pthread_cleanup_pop(0);
   return NULL;
