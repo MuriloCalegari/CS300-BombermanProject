@@ -16,6 +16,7 @@ gameboard* create_board(){
     g->lw->cursor = 0;
     g->p = malloc(sizeof(pos));
     g->p->x = 0; g->p->y = 0;
+    g->init = 0;
 
     for(int i=0; i < MAX_VERTICAL_LINE; i++){
         g->lr->len[i] = 0;
@@ -31,7 +32,6 @@ gameboard* create_board(){
     curs_set(0); // Set the cursor to invisible
     start_color(); // Enable colors
     init_pair(1, COLOR_YELLOW, COLOR_BLACK); // Define a new color style (text is yellow, background is black)
-    setup_board(g->b);
     return g;
 }
 
@@ -43,13 +43,11 @@ void free_gameboard(gameboard *g){
     free(g);
 }
 
-void setup_board(board* board) {
-    int lines; int columns;
-    lines = DIM;
-    columns = DIM;
+void setup_board(board* board, int lines, int columns) {
     board->h = lines + 1 + 3; //  4 (1 tchat write, 3 tchat read) row for chat
     board->w = columns;
-    for(int i=0; i < (DIM*DIM); i++){
+    board->grid = malloc(sizeof(uint8_t) * lines * columns);
+    for(int i=0; i < (lines*columns); i++){
         board->grid[i] = 0;
     }
 }

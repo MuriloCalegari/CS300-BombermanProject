@@ -17,6 +17,8 @@
 
 char* addr;
 
+#define SIZE_MAX_GRID 2000
+
 int connect_to_server(int port, char* addr){
     //*** create socket ***
     int sockfd = socket(PF_INET6, SOCK_STREAM, 0);
@@ -229,8 +231,7 @@ int udp_message(player *pl, int action){
     struct sockaddr_in6 adr;
     memset(&adr, 0, sizeof(adr));
     adr.sin6_family = AF_INET6;
-    // memcpy(&adr.sin6_addr, pl->adr_udp, sizeof(pl->adr_udp)); // TODO can we clean the code from commented out expressions ?
-    inet_pton(AF_INET6, "::1", &adr.sin6_addr); // TODO dinamically get this from args
+    inet_pton(AF_INET6, pl->server_adr, &adr.sin6_addr); 
     adr.sin6_port = htons(pl->port_udp);
 
     int send = sendto(pl->socket_udp, &buffer, sizeof(buffer), 0, (struct sockaddr *)&adr, sizeof(adr));
@@ -245,7 +246,7 @@ int udp_message(player *pl, int action){
 void *game_control(void *arg){
     player *pl = (player *)arg;
     pl->id = 1;
-    while(/*pl->ready == 1 && */ pl->end == 0){ // TODO can we clean the code from commented out expressions ?
+    while(pl->end == 0){
         ACTION a = control(pl->g->lw);
         pthread_mutex_lock(&pl->mutex);
         switch(a){
@@ -256,9 +257,9 @@ void *game_control(void *arg){
                 pl->end = 1;
                 pthread_exit(NULL);
             case ENTER:
-                //if(pl->g->lw->cursor > 0){ // TODO can we clean the code from commented out expressions ?
+                if(pl->g->lw->cursor > 0){ 
                     tchat_message(pl);
-                //}
+                }
                 break;
             case LEFT: //left
                 udp_message(pl, MOVE_WEST);
@@ -342,16 +343,17 @@ void *read_tcp_tchat(void* arg){
 
 void print_board(LOG_LEVEL level, board* b) {
     // Print board to stderr
-    for(int i = 0; i < DIM; i++) {
-        for(int j = 0; j < DIM; j++) {
+    for(int i = 0; i < b->h; i++) {
+        for(int j = 0; j < b->w; j++) {
             print_log_prefixed(level, 0, "%d ", get_grid(b, j, i));
         }
         print_log_prefixed(level, 0, "\n");
     }
 }
 
+
 void refresh_gameboard_implementation(player *pl) {
-    int buf_size = sizeof(MatchFullUpdateHeader) + (DIM * DIM * sizeof(uint8_t) * 3);
+    int buf_size = sizeof(MatchFullUpdateHeader) + SIZE_MAX_GRID*3;
     print_log(LOG_DEBUG, "Mallocing buffer of size %d for UDP gameboard updates\n", buf_size);
     char *buf = malloc(buf_size);
     MessageHeader *header;
@@ -362,12 +364,20 @@ void refresh_gameboard_implementation(player *pl) {
         print_log(LOG_VERBOSE, "Received header on UDP:\n");
         print_header(LOG_VERBOSE, header);
 
-        pl->ready = 1; // unlock control player
         if((GET_CODEREQ(header)) == SERVER_FULL_MATCH_STATUS){
+
             MatchFullUpdateHeader *mfuh = (MatchFullUpdateHeader *) buf;
+            int columns = mfuh->height;
+            int lines = mfuh->width;
+
+            if(pl->g->init == 0){ //init grid
+                setup_board(pl->g->b, lines, columns);
+                pl->g->init = 1;
+            }
+
             mfuh->num = ntohs(mfuh->num);
             print_log(LOG_VERBOSE, "Received full match status with height %d and width %d\n", mfuh->height, mfuh->width);
-            memcpy(pl->g->b->grid, buf + sizeof(MatchFullUpdateHeader), DIM * DIM * sizeof(uint8_t));
+            memcpy(pl->g->b->grid, buf + sizeof(MatchFullUpdateHeader), columns * lines * sizeof(uint8_t));
             print_board(LOG_VERBOSE, pl->g->b);
 
             pthread_mutex_lock(&pl->mutex);
@@ -404,7 +414,6 @@ void *refresh_gameboard(void *arg){ // multicast
 int main(int argc, char** args){
     player *pl = malloc(sizeof(player));
     pl->num = 0; // number of action
-    pl->ready = 0;
     pl->end = 0;
     pthread_mutex_init(&pl->mutex, 0);
 
