@@ -246,35 +246,43 @@ void *game_control(void *arg){
     player *pl = (player *)arg;
     pl->id = 1;
     while(pl->end == 0){
-        ACTION a = control(pl->g->lw);
+        ACTION a = control(pl->g->lw, pl->tchat_mode);
         pthread_mutex_lock(&pl->mutex);
-        switch(a){
-            case QUIT: // quit
-                curs_set(1); // Set the cursor to visible again
-                endwin(); /* End curses mode */
-                pl->end = 1;
-                pthread_exit(NULL);
-            case ENTER:
-                if(pl->g->lw->cursor > 0){ 
+
+        if(a == ENTER){
+            if(pl->tchat_mode == 0){
+                pl->tchat_mode = 1;
+            }else{
+                pl->tchat_mode = 0;
+            }
+            if(pl->g->lw->cursor > 0){ 
                     tchat_message(pl);
-                }
-                break;
-            case LEFT: //left
-                udp_message(pl, MOVE_WEST);
-                break;
-            case RIGHT: //right
-                udp_message(pl, MOVE_EAST);
-                break;
-            case UP: //up
-                udp_message(pl, MOVE_NORTH);
-                break;
-            case DOWN: //down
-                udp_message(pl, MOVE_SOUTH);
-                break;
-            case BOMB_ACTION:
-                udp_message(pl, DROP_BOMB);
-                break;
-            default: break;
+            }
+        }
+        if(pl->tchat_mode == 0){
+            switch(a){
+                case QUIT: // quit
+                    curs_set(1); // Set the cursor to visible again
+                    endwin(); /* End curses mode */
+                    pl->end = 1;
+                    pthread_exit(NULL);
+                case LEFT: //left
+                    udp_message(pl, MOVE_WEST);
+                    break;
+                case RIGHT: //right
+                    udp_message(pl, MOVE_EAST);
+                    break;
+                case UP: //up
+                    udp_message(pl, MOVE_NORTH);
+                    break;
+                case DOWN: //down
+                    udp_message(pl, MOVE_SOUTH);
+                    break;
+                case BOMB_ACTION:
+                    udp_message(pl, DROP_BOMB);
+                    break;
+                default: break;
+            }
         }
         pthread_mutex_unlock(&pl->mutex);
     }
@@ -413,6 +421,7 @@ int main(int argc, char** args){
     player *pl = malloc(sizeof(player));
     pl->num = 0; // number of action
     pl->end = 0;
+    pl->tchat_mode = 0;
     pthread_mutex_init(&pl->mutex, 0);
 
     if(argc < 4){

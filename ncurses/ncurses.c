@@ -133,7 +133,7 @@ void refresh_game(board* b, line_w* lw, line_r* lr) {
     refresh(); // Apply the changes to the terminal
 }
 
-ACTION control(line_w* l) {
+ACTION control(line_w* l, int mode) {
     int c;
     int prev_c = ERR;
     // We consume all similar consecutive key presses
@@ -162,10 +162,10 @@ ACTION control(line_w* l) {
             break;
         case '\n': 
             a = ENTER; break;
-        case '@': // SPACE
+        case ' ': // SPACE
             a = BOMB_ACTION; break;
         default:
-            if (prev_c >= ' ' && prev_c <= '~' && l->cursor < SIZE_MAX_MESSAGE)
+            if (prev_c >= ' ' && prev_c <= '~' && l->cursor < SIZE_MAX_MESSAGE && mode == 1)
                 l->data[(l->cursor)++] = prev_c;
             break;
     }

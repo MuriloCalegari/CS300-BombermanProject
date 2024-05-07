@@ -21,5 +21,6 @@ typedef struct player {
     pthread_mutex_t mutex;
     gameboard* g;
     int freq;
+    int tchat_mode;
     int end;
 } player;
