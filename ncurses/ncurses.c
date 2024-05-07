@@ -162,7 +162,7 @@ ACTION control(line_w* l) {
             break;
         case '\n': 
             a = ENTER; break;
-        case ' ': // SPACE
+        case '@': // SPACE
             a = BOMB_ACTION; break;
         default:
             if (prev_c >= ' ' && prev_c <= '~' && l->cursor < SIZE_MAX_MESSAGE)
@@ -193,26 +193,26 @@ int perform_action(ACTION a) {
 }
 
 
-void test(gameboard *g){
-    int up[DIM*DIM];
-    for(int i=0; i<DIM; i++){
-        up[i] = 1;
-    }
+// void test(gameboard *g){
+//     int up[DIM*DIM];
+//     for(int i=0; i<DIM; i++){
+//         up[i] = 1;
+//     }
 
-    for(int j=DIM; j<DIM; j++){
-        srand(time(NULL));
-        up[j] = rand()%3;
-    }
+//     for(int j=DIM; j<DIM; j++){
+//         srand(time(NULL));
+//         up[j] = rand()%3;
+//     }
 
-    for(int i=0; i<DIM; i++){
-        up[i*DIM] = 2;
-    }
+//     for(int i=0; i<DIM; i++){
+//         up[i*DIM] = 2;
+//     }
 
-    //g->b->grid = up;
-    for(int i=0; i<DIM*DIM; i++){
-        g->b->grid[i] = up[i];
-    }
-}
+//     //g->b->grid = up;
+//     for(int i=0; i<DIM*DIM; i++){
+//         g->b->grid[i] = up[i];
+//     }
+// }
 
 /*
 int main(){

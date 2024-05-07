@@ -13,8 +13,8 @@
 #include "server/match.h"
 #include "common/util.h"
 
-#define HEIGHT DIM
-#define WIDTH DIM
+#define HEIGHT 15
+#define WIDTH 15
 #define MULTICAST_ADDRESS "ff02::1"
 
 int current_udp_port = 10123; // Used for multicast groups
@@ -280,9 +280,9 @@ void *tcp_player_handler(void *arg) {
         pthread_mutex_unlock(&match->mutex); 
         break;
       case T_CHAT_TEAM:
-//        pthread_mutex_lock(&match->mutex); TODO DELETE
+        pthread_mutex_lock(&match->mutex);
         send_message(match, player_index, T_CHAT_ALL_PLAYERS);
-//        pthread_mutex_unlock(&match->mutex); TODO DELETE
+        pthread_mutex_unlock(&match->mutex);
         break;
     }
   }

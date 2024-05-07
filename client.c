@@ -110,7 +110,6 @@ int start_match(player *pl, int mode) {
     struct sockaddr_in6 adr;
     memset(&adr, 0, sizeof(adr));
     adr.sin6_family = AF_INET6;
-    //memcpy(&adr.sin6_addr, &pl.adr_udp, sizeof(pl.adr_udp));
     adr.sin6_addr = in6addr_any;
     adr.sin6_port = htons(pl->port_multidiff);
 
@@ -251,7 +250,6 @@ void *game_control(void *arg){
         pthread_mutex_lock(&pl->mutex);
         switch(a){
             case QUIT: // quit
-                // free_board(pl->g->b); // TODO can we clean the code from commented out expressions ?
                 curs_set(1); // Set the cursor to visible again
                 endwin(); /* End curses mode */
                 pl->end = 1;
@@ -273,7 +271,7 @@ void *game_control(void *arg){
             case DOWN: //down
                 udp_message(pl, MOVE_SOUTH);
                 break;
-            case BOMB_ACTION: // bomb TODO need to assign a key to this action in control()
+            case BOMB_ACTION:
                 udp_message(pl, DROP_BOMB);
                 break;
             default: break;
