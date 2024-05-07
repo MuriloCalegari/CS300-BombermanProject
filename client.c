@@ -398,6 +398,9 @@ void refresh_gameboard_implementation(player *pl) {
             pthread_mutex_unlock(&pl->mutex);
         } else if((GET_CODEREQ(header)) == SERVER_PARTIAL_MATCH_UPDATE){
 
+            // Ignore partial updates before we get the first full grid update
+            if(pl->g->init == 0) break;
+
             MatchUpdateHeader *muh = (MatchUpdateHeader *) buf;
             muh->num = ntohs(muh->num);
             int count = muh->count;

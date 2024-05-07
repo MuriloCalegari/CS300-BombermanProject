@@ -82,6 +82,7 @@ Match *create_new_match(int client_socket, int udp_port, int height, int width,
     new_match->width = width;
     assert(height > 0 && width > 0);
     new_match->grid = malloc(height * width * sizeof(uint8_t));
+    new_match->exploded_walls_bitmap = malloc(height * width * sizeof(uint8_t));
     initialize_grid(new_match);
 
     // Put the player on the grid
@@ -158,6 +159,7 @@ void initialize_grid(Match *match) {
     }
 
     memset(match->grid, EMPTY_CELL, grid_size * sizeof(*match->grid));
+    memset(match->exploded_walls_bitmap, EMPTY_CELL, grid_size * sizeof(*match->exploded_walls_bitmap));
 
      for (int i = 1; i < match->height - 1; i++) {
        if (i % 2 == 0) continue;
@@ -298,11 +300,9 @@ int move_player(Match *match, int player_index, int action,
     // before he moves, so we only update that old cell to an EMPTY_CELL if there
     // was no bomb there before
     if (match->grid[player_position] != BOMB) {
-        // TODO need to account for EXPLODED_BY_BOMB,
-        // probably use a bitmap of walls that have been exploded
         VERBOSE_PRINTF("Old position is not a bomb, setting as EMPTY_CELL\n");
-        match->grid[player_position] = EMPTY_CELL;
-        result_from->status = EMPTY_CELL;
+        match->grid[player_position] = match->exploded_walls_bitmap[player_position];
+        result_from->status = match->exploded_walls_bitmap[player_position];
     }
 
     match->grid[new_position] = ENCODE_PLAYER(player_index);
@@ -487,6 +487,7 @@ void kill_or_explode(Match* match, int i, int j) {
     // Check if the nearby cell contains a destructible wall
     if (match->grid[cell] == DESTRUCTIBLE_WALL) {
         match->grid[cell] = EXPLODED_BY_BOMB; // Destroy the wall
+        match->exploded_walls_bitmap[cell] = EXPLODED_BY_BOMB;
     } else if (match->grid[cell] >= PLAYER_OFFSET) {
         int player = DECODE_PLAYER(match->grid[cell]);
         match->player_status[player] = DEAD;
@@ -512,9 +513,7 @@ void explode_bomb(Match* match, int i, int j){
 
     DEBUG_PRINTF("Exploding bomb at (%d, %d)\n", i, j);
 
-    // TODO need to account for EXPLODED_BY_BOMB,
-    // probably use a bitmap of walls that have been exploded
-    match->grid[cell] = EMPTY_CELL; // Remove the bomb
+    match->grid[cell] = match->exploded_walls_bitmap[cell]; // Remove the bomb
 
     // Vertical explosions
     for(int k = -2; k <= 2; k++) {
@@ -565,6 +564,9 @@ void explode_bombs(Match *match) {
                 }
                 if(match->bombs_head == NULL) { // Happens when there was only one bomb in the list
                     match->bombs_tail = NULL;
+                }
+                if(match->bombs_head != NULL && match->bombs_head->next == NULL) {
+                    match->bombs_tail = match->bombs_head;
                 }
             } else { // Bomb is at the tail
                 match->bombs_tail = current_bomb->prev;
@@ -722,6 +724,7 @@ void finish_match(Match* match, int result) {
     close(match->inbound_socket_udp);
     close(match->outbound_socket_udp);
     free(match->grid);
+    free(match->exploded_walls_bitmap);
     free_bombs(match->bombs_head);
     pthread_mutex_destroy(&match->mutex);
     free(match);

@@ -5,7 +5,7 @@
 #endif
 
 #ifdef VERBOSE
-    #define VERBOSE_PRINTF(...) printf("DEBUG: " __VA_ARGS__)
+    #define VERBOSE_PRINTF(...) printf("VERBOSE: " __VA_ARGS__)
 #else
     #define VERBOSE_PRINTF(...) do {} while (0)
 #endif

@@ -11,7 +11,7 @@ socket information, current game status, etc.
 #define FOUR_OPPONENTS_MODE 0
 #define TEAM_MODE 1
 
-#define MAX_PLAYERS_PER_MATCH 4
+#define MAX_PLAYERS_PER_MATCH 1
 
 #define LONG_FREQ_MS 1000
 #define MIN_SHORT_FREQ 100
@@ -68,6 +68,7 @@ typedef struct Match {
     uint8_t height;
     uint8_t width;
     uint8_t *grid;
+    uint8_t *exploded_walls_bitmap;
 
     /* Buffer storing the latest actions that we have received from the players so far */
     ActionBuf latest_movements[MAX_PLAYERS_PER_MATCH];
