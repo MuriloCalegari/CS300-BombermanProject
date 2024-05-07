@@ -17,7 +17,7 @@
 #define WIDTH 15
 #define MULTICAST_ADDRESS "ff02::1"
 
-int current_udp_port = 10123; // Used for multicast groups
+int current_udp_port = 11000; // Used for multicast groups
 int server_tcp_port;
 int freq;
 
@@ -302,9 +302,11 @@ void *match_handler(void *arg) {
     ActionMessage action_message;
 
     read_loop(match->inbound_socket_udp, &action_message, sizeof(ActionMessage), 0);
+    action_message.action_identifier = ntohs(action_message.action_identifier);
+    action_message.message_header.header_line = ntohs(action_message.message_header.header_line);
 
-    if((GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_4_OPPONENTS
-        || (GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_2_TEAMS) {
+    if(!((GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_4_OPPONENTS
+        || (GET_CODEREQ(&action_message.message_header)) == ACTION_MESSAGE_2_TEAMS)) {
           printf("Received invalid CODEREQ %d on UDP port. Ignoring...\n", GET_CODEREQ(&action_message.message_header));
           continue;
     }

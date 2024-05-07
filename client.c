@@ -105,6 +105,11 @@ int start_match(player *pl, int mode) {
         close(pl->socket_udp);
         return 1;
     }
+    if(setsockopt(pl->socket_multidiff, SOL_SOCKET, SO_REUSEPORT, &ok, sizeof(ok)) < 0) {
+        perror("echec de SO_REUSEADDR");
+        close(pl->socket_udp);
+        return 1;
+    }
 
     /* Initialization of the reception address */
     struct sockaddr_in6 adr;
@@ -226,6 +231,7 @@ int udp_message(player *pl, int action){
     SET_ACTION(&buffer, action);
 
     buffer.message_header.header_line = htons(buffer.message_header.header_line);
+    buffer.action_identifier = htons(buffer.action_identifier);
 
     struct sockaddr_in6 adr;
     memset(&adr, 0, sizeof(adr));
@@ -244,7 +250,6 @@ int udp_message(player *pl, int action){
 
 void *game_control(void *arg){
     player *pl = (player *)arg;
-    pl->id = 1;
     while(pl->end == 0){
         ACTION a = control(pl->g->lw, pl->tchat_mode);
         pthread_mutex_lock(&pl->mutex);
