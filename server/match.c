@@ -297,9 +297,11 @@ int move_player(Match *match, int player_index, int action,
         // probably use a bitmap of walls that have been exploded
         VERBOSE_PRINTF("Old position is not a bomb, setting as EMPTY_CELL\n");
         match->grid[player_position] = EMPTY_CELL;
+        result_from->status = EMPTY_CELL;
     }
 
     match->grid[new_position] = ENCODE_PLAYER(player_index);
+    result_to->status = ENCODE_PLAYER(player_index);
 
     match->players_current_position[player_index] = new_position;
 
@@ -432,9 +434,10 @@ void process_partial_updates(Match *match) {
         }
     }
     pthread_mutex_unlock(&match->mutex);
-
-    send_partial_updates(movement_updates, movement_count, bomb_updates,
-                         bomb_count, match);
+    if(movement_count > 0 || bomb_count > 0) {
+        send_partial_updates(movement_updates, movement_count, bomb_updates,
+                             bomb_count, match);
+    }
 }
 
 void send_full_grid_to_all_players(Match *match) {

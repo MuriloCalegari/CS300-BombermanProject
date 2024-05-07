@@ -251,8 +251,9 @@ int udp_message(player *pl, int action){
 void *game_control(void *arg){
     player *pl = (player *)arg;
     while(pl->end == 0){
-        ACTION a = control(pl->g->lw, pl->tchat_mode);
         pthread_mutex_lock(&pl->mutex);
+        ACTION a = control(pl->g->lw, pl->tchat_mode);
+        pthread_mutex_unlock(&pl->mutex);
 
         if(a == ENTER){
             if(pl->tchat_mode == 0){
@@ -260,8 +261,10 @@ void *game_control(void *arg){
             }else{
                 pl->tchat_mode = 0;
             }
-            if(pl->g->lw->cursor > 0){ 
-                    tchat_message(pl);
+            if(pl->g->lw->cursor > 0){
+                pthread_mutex_lock(&pl->mutex);
+                tchat_message(pl);
+                pthread_mutex_unlock(&pl->mutex);
             }
         }
         if(pl->tchat_mode == 0){
@@ -289,7 +292,6 @@ void *game_control(void *arg){
                 default: break;
             }
         }
-        pthread_mutex_unlock(&pl->mutex);
     }
     pthread_exit(NULL);
 }
@@ -399,6 +401,9 @@ void refresh_gameboard_implementation(player *pl) {
             MatchUpdateHeader *muh = (MatchUpdateHeader *) buf;
             muh->num = ntohs(muh->num);
             int count = muh->count;
+
+            print_log(LOG_VERBOSE, "Received a partial update with %d cells\n", count);
+
             CellStatusUpdate *current_cell = (CellStatusUpdate *)(buf + sizeof(MatchUpdateHeader));
 
             for(int i=0; i<count; i++){
