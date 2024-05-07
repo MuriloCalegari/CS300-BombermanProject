@@ -8,6 +8,8 @@
 
 typedef enum ACTION { NONE, UP, DOWN, LEFT, RIGHT, QUIT, ENTER, BOMB_ACTION} ACTION;
 
+typedef enum COLOR_PAIR_INDEXES { DEFAULT_COLOR, TCHAT_COLOR, BOMB_COLOR } COLOR_PAIR_INDEXES;
+
 typedef struct board {
     uint8_t *grid;
     int w;

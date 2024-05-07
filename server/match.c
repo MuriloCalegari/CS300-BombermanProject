@@ -80,6 +80,7 @@ Match *create_new_match(int client_socket, int udp_port, int height, int width,
 
     new_match->height = height;
     new_match->width = width;
+    assert(height > 0 && width > 0);
     new_match->grid = malloc(height * width * sizeof(uint8_t));
     initialize_grid(new_match);
 
@@ -151,28 +152,32 @@ int add_player_to_match_2_teams(Match *match, int client_socket) {
 void initialize_grid(Match *match) {
     int grid_size = match->height * match->width;
 
+    if(match->grid == NULL) {
+        print_log(LOG_ERROR, "Called initialize_grid with NULL grid\n");
+        exit(-1);
+    }
+
     memset(match->grid, EMPTY_CELL, grid_size * sizeof(*match->grid));
 
-    // // TODO place destructible and undestructible walls on the grid
-    // for (int i = 1; i < match->height - 1; i++) {
-    //   if (i % 2 == 0) continue;
-    //   for (int j = 1; j < match->width - 1; j++) {
-    //     if (j % 2 == 1) {
-    //       match->grid[i * match->width + j] = INDESTRUCTIBLE_WALL;
-    //     }
-    //   }
-    // }
-    // srand(time(NULL));
-    // int a_place = grid_size / 3;
-    // int nb = 0;
-    // while (nb < a_place) {
-    //   int i = rand() % (match->height - 2) + 1;
-    //   int j = rand() % (match->width - 2) + 1;
-    //   if (match->grid[i * match->width + j] == EMPTY_CELL) {
-    //     match->grid[i * match->width + j] = DESTRUCTIBLE_WALL;
-    //     nb++;
-    //   }
-    // }
+     for (int i = 1; i < match->height - 1; i++) {
+       if (i % 2 == 0) continue;
+       for (int j = 1; j < match->width - 1; j++) {
+         if (j % 2 == 1) {
+           match->grid[i * match->width + j] = INDESTRUCTIBLE_WALL;
+         }
+       }
+     }
+     srand(time(NULL));
+     int a_place = grid_size / 3;
+     int nb = 0;
+     while (nb < a_place) {
+       int i = rand() % (match->height - 2) + 1;
+       int j = rand() % (match->width - 2) + 1;
+       if (match->grid[i * match->width + j] == EMPTY_CELL) {
+         match->grid[i * match->width + j] = DESTRUCTIBLE_WALL;
+         nb++;
+       }
+     }
 };
 
 // We use this constant such that a message with num [0, OVERFLOW_DETECTION]
@@ -329,6 +334,7 @@ void drop_bomb(Match *match, int player_index, CellStatusUpdate *result) {
 
     result->row = row;
     result->col = col;
+    result->status = BOMB;
 
     Bomb *bomb = malloc(sizeof(Bomb));
     bomb->row = row;

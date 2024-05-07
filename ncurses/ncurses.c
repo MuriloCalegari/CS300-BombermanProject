@@ -31,7 +31,8 @@ gameboard* create_board(){
     noecho(); /* Don't echo() while we do getch (we will manually print characters when relevant) */
     curs_set(0); // Set the cursor to invisible
     start_color(); // Enable colors
-    init_pair(1, COLOR_YELLOW, COLOR_BLACK); // Define a new color style (text is yellow, background is black)
+    init_pair(TCHAT_COLOR, COLOR_YELLOW, COLOR_BLACK); // Define a new color style (text is yellow, background is black)
+    init_pair(BOMB_COLOR, COLOR_RED, COLOR_BLACK); // Define a new color style (text is yellow, background is black)
     return g;
 }
 
@@ -103,11 +104,19 @@ void refresh_game(board* b, line_w* lw, line_r* lr) {
                     c = '?';
                     break;
             }
+            if(get_grid(b,x,y) == BOMB) {
+                attron(COLOR_PAIR(BOMB_COLOR)); // Enable custom color 1
+                attron(A_BOLD); // Enable bold
+            }
             mvaddch(y,x,c);
+            if(get_grid(b,x,y) == BOMB) {
+                attroff(COLOR_PAIR(BOMB_COLOR)); // Enable custom color 1
+                attroff(A_BOLD); // Enable bold
+            }
         }
     }
     // Update chat text
-    attron(COLOR_PAIR(1)); // Enable custom color 1
+    attron(COLOR_PAIR(TCHAT_COLOR)); // Enable custom color 1
     attron(A_BOLD); // Enable bold
     // tchat read
     int i = 0;
@@ -129,7 +138,7 @@ void refresh_game(board* b, line_w* lw, line_r* lr) {
             mvaddch(b->h-1, x, lw->data[x]);
     }
     attroff(A_BOLD); // Disable bold
-    attroff(COLOR_PAIR(1)); // Disable custom color 1
+    attroff(COLOR_PAIR(TCHAT_COLOR)); // Disable custom color 1
     refresh(); // Apply the changes to the terminal
 }
 
