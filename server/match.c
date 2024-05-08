@@ -283,13 +283,13 @@ int move_player(Match *match, int player_index, int action,
     }
 
     if (new_position < 0 || new_position >= match->height * match->width) {
-        printf("Player %d tried to move out of bounds\n", player_index);
+        print_log(LOG_DEBUG, "Player %d tried to move out of bounds\n", player_index);
         return OUT_OF_BOUNDS;
     }
 
     if (!(match->grid[new_position] == EMPTY_CELL ||
           match->grid[new_position] == EXPLODED_BY_BOMB)) {
-        printf("Player %d tried to move to an occupied cell\n", player_index);
+        print_log(LOG_DEBUG, "Player %d tried to move to an occupied cell\n", player_index);
         return OCCUPIED_CELL;
     }
 
@@ -300,9 +300,12 @@ int move_player(Match *match, int player_index, int action,
     // before he moves, so we only update that old cell to an EMPTY_CELL if there
     // was no bomb there before
     if (match->grid[player_position] != BOMB) {
-        VERBOSE_PRINTF("Old position is not a bomb, setting as EMPTY_CELL\n");
+        print_log(LOG_VERBOSE, "Old position is not a bomb, setting as EMPTY_CELL\n");
         match->grid[player_position] = match->exploded_walls_bitmap[player_position];
         result_from->status = match->exploded_walls_bitmap[player_position];
+    } else {
+        print_log(LOG_VERBOSE, "Old position is a bomb, keeping it as is\n");
+        result_from->status = BOMB;
     }
 
     match->grid[new_position] = ENCODE_PLAYER(player_index);
@@ -397,7 +400,7 @@ void process_partial_updates(Match *match) {
 
     // Every successful movement will generate 2 updates:
     // one for the cell the player is moving from and one for the cell the player
-    // is moving to Every freq time, only one action per player is allowed, so we
+    // is moving to Every freq time. Only one action per player is allowed, so we
     // can have at most 2 * MAX_PLAYERS_PER_MATCH movement updates
     CellStatusUpdate movement_updates[2 * MAX_PLAYERS_PER_MATCH];
     memset(movement_updates, 0, 2 * MAX_PLAYERS_PER_MATCH * sizeof(CellStatusUpdate));
@@ -482,6 +485,35 @@ void send_full_grid_to_all_players(Match *match) {
     }
 }
 
+void kill_player_at_case(Match *match, int i, int j) {
+    int cell = i * match->width + j;
+
+    int killed = 0;
+
+    if(match->grid[cell] >= PLAYER_OFFSET) {
+        int player = DECODE_PLAYER(match->grid[cell]);
+        match->player_status[player] = DEAD;
+        match->players_current_position[player] = -1;
+        match->grid[cell] = EMPTY_CELL;
+        killed = 1;
+    } else if (match->grid[cell] == BOMB) {
+        // then we need to find the player in the same cell
+        for(int k = 0; k < match->players_count; k++) {
+            if(match->players_current_position[k] == cell) {
+                match->player_status[k] = DEAD;
+                match->players_current_position[k] = -1;
+                match->grid[cell] = EMPTY_CELL;
+                killed = 1;
+            }
+        }
+    } else {
+        print_log(LOG_WARNING, "Tried to kill player at cell %d, but there was no player or bomb there\n", cell);
+        return;
+    }
+
+    if(killed) print_log(LOG_DEBUG, "Killed player at cell %d\n", cell);
+}
+
 void kill_or_explode(Match* match, int i, int j) {
     int cell = i * match->width + j;
 
@@ -489,12 +521,8 @@ void kill_or_explode(Match* match, int i, int j) {
     if (match->grid[cell] == DESTRUCTIBLE_WALL) {
         match->grid[cell] = EXPLODED_BY_BOMB; // Destroy the wall
         match->exploded_walls_bitmap[cell] = EXPLODED_BY_BOMB;
-    } else if (match->grid[cell] >= PLAYER_OFFSET) {
-        int player = DECODE_PLAYER(match->grid[cell]);
-        match->player_status[player] = DEAD;
-        match->players_current_position[player] = -1;
-        match->grid[cell] = EMPTY_CELL; // Put an empty cell where player was
-        print_log(LOG_DEBUG, "Killing player %d\n", player);
+    } else if (match->grid[cell] >= PLAYER_OFFSET || match->grid[cell] == BOMB) {
+        kill_player_at_case(match, i, j);
     }
 }
 
@@ -514,7 +542,10 @@ void explode_bomb(Match* match, int i, int j){
 
     DEBUG_PRINTF("Exploding bomb at (%d, %d)\n", i, j);
 
-    match->grid[cell] = match->exploded_walls_bitmap[cell]; // Remove the bomb
+    // Player might still be at the bomb location
+    kill_or_explode(match, i, j);
+
+    // TODO if there is an indestructible wall, stop the explosion in that direction
 
     // Vertical explosions
     for(int k = -2; k <= 2; k++) {
@@ -542,6 +573,8 @@ void explode_bomb(Match* match, int i, int j){
             }
         }
     }
+
+    match->grid[cell] = match->exploded_walls_bitmap[cell]; // Remove the bomb
 }
 
 void explode_bombs(Match *match) {

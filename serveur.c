@@ -82,9 +82,6 @@ int main(int argc, char** args) {
     }
   }
 
-  //*** fermeture socket client ***
-  // close(client_socket); // TODO we should clear this at some point, as well as the malloc-ed Match pointers
-
   //*** fermeture socket serveur ***
   close(sock);
   
