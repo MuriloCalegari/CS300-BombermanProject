@@ -2,6 +2,8 @@
 #include "../common/messages.h"
 #include <unistd.h>
 
+#define GET_CELL(match, i, j) ((match)->grid)[(i) * ((match)->width) + (j)]
+
 void initialize_grid(Match* match);
 Match *create_new_match_4_opponents(int client_socket, int current_udp_port, int height, int width, char *multicast_address, int freq);
 Match *create_new_match_2_teams(int client_socket, int current_udp_port, int height, int width, char *multicast_address, int freq);

@@ -526,6 +526,10 @@ void kill_or_explode(Match* match, int i, int j) {
     }
 }
 
+int is_out_of_bounds(Match *match, int i, int j) {
+    return i < 0 || i >= match->height || j < 0 || j >= match->width;
+}
+
 void explode_bomb(Match* match, int i, int j){
     // Check if the bomb is within the grid boundaries
     if (i < 0 || i >= match->height || j < 0 || j >= match->width) {
@@ -545,22 +549,80 @@ void explode_bomb(Match* match, int i, int j){
     // Player might still be at the bomb location
     kill_or_explode(match, i, j);
 
-    // TODO if there is an indestructible wall, stop the explosion in that direction
+    // North explosions
+    for(int k = 1; k <= 2; k++) {
+        int ni = i - k;
 
-    // Vertical explosions
-    for(int k = -2; k <= 2; k++) {
-        int ni = i + k;
+        if(is_out_of_bounds(match, ni, j)) {
+            break;
+        }
+
+        int should_explosion_be_interrupted =
+                (GET_CELL(match, ni, j) == DESTRUCTIBLE_WALL) ||
+                (GET_CELL(match, ni, j) == INDESTRUCTIBLE_WALL);
+
         if (ni >= 0 && ni < match->height) {
             kill_or_explode(match, ni, j);
         }
+
+        if(should_explosion_be_interrupted) break;
     }
 
-    // Horizontal explosions
-    for(int l = -2; l <= 2; l++) {
-        int nj = j + l;
+    // South explosions
+    for(int k = 1; k <= 2; k++) {
+        int ni = i + k;
+
+        if(is_out_of_bounds(match, ni, j)) {
+            break;
+        }
+
+        int should_explosion_be_interrupted =
+                (GET_CELL(match, ni, j) == DESTRUCTIBLE_WALL) ||
+                (GET_CELL(match, ni, j) == INDESTRUCTIBLE_WALL);
+
+        if (ni >= 0 && ni < match->height) {
+            kill_or_explode(match, ni, j);
+        }
+
+        if(should_explosion_be_interrupted) break;
+    }
+
+    // West explosions
+    for(int l = 1; l <= 2; l++) {
+        int nj = j - l;
+
+        if(is_out_of_bounds(match, i, nj)) {
+            break;
+        }
+
+        int should_explosion_be_interrupted =
+                (GET_CELL(match, i, nj) == DESTRUCTIBLE_WALL) ||
+                (GET_CELL(match, i, nj) == INDESTRUCTIBLE_WALL);
+
         if (nj >= 0 && nj < match->width) {
             kill_or_explode(match, i, nj);
         }
+
+        if(should_explosion_be_interrupted) break;
+    }
+
+    // East explosions
+    for(int l = 1; l <= 2; l++) {
+        int nj = j + l;
+
+        if(is_out_of_bounds(match, i, nj)) {
+            break;
+        }
+
+        int should_explosion_be_interrupted =
+            (GET_CELL(match, i, nj) == DESTRUCTIBLE_WALL) ||
+            (GET_CELL(match, i, nj) == INDESTRUCTIBLE_WALL);
+
+        if (nj >= 0 && nj < match->width) {
+            kill_or_explode(match, i, nj);
+        }
+
+        if(should_explosion_be_interrupted) break;
     }
 
     // Diagonal explosions
