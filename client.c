@@ -227,7 +227,7 @@ int udp_message(player *pl, int action){
     SET_EQ(&buffer.message_header, pl->eq);
     SET_ID(&buffer.message_header, pl->id);
     SET_NUM(&buffer, (pl->num % NUM_MAX));
-    pl->num = pl->num+1;
+    pl->num = (pl->num+1) % NUM_MAX;
     SET_ACTION(&buffer, action);
 
     buffer.message_header.header_line = htons(buffer.message_header.header_line);

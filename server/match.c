@@ -367,6 +367,7 @@ void send_partial_updates(CellStatusUpdate *movement_updates,
     memset(&match_update_header, 0, sizeof(match_update_header));
     match_update_header.header = header;
     match_update_header.num = match->partial_update_current_num;
+    match_update_header.num = htons(match_update_header.num);
     match->partial_update_current_num++;
     match_update_header.count = movement_count + bomb_count;
 
