@@ -254,6 +254,26 @@ void handle_action_message(Match *match, ActionMessage actionMessage) {
     pthread_mutex_unlock(&match->mutex);
 }
 
+int has_moved_out_of_bounds(Match *match, int player_index, int action) {
+    int player_position = match->players_current_position[player_index];
+    int row = player_position / match->width;
+    int col = player_position % match->width;
+
+    switch (action) {
+        case MOVE_NORTH:
+            return row == 0;
+        case MOVE_EAST:
+            return col == match->width - 1;
+        case MOVE_SOUTH:
+            return row == match->height - 1;
+        case MOVE_WEST:
+            return col == 0;
+        default:
+            print_log(LOG_WARNING, "Invalid action %d in has_moved_out_of_bounds\n", action);
+            return 1;
+    }
+}
+
 #define INVALID_ACTION -1
 #define OUT_OF_BOUNDS -2
 #define OCCUPIED_CELL -3
@@ -282,7 +302,7 @@ int move_player(Match *match, int player_index, int action,
             return INVALID_ACTION;
     }
 
-    if (new_position < 0 || new_position >= match->height * match->width) {
+    if (new_position < 0 || has_moved_out_of_bounds(match, player_index, action)) {
         print_log(LOG_DEBUG, "Player %d tried to move out of bounds\n", player_index);
         return OUT_OF_BOUNDS;
     }
