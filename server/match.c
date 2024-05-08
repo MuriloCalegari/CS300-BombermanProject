@@ -228,7 +228,12 @@ void handle_action_message(Match *match, ActionMessage actionMessage) {
 
     // For simplicity, we use the id as the player index
     int player_index = player_id;
-    printf("Player %d has sent action %d with num %d\n", player_id, action, num);
+    print_log(LOG_DEBUG, "Player %d has sent action %d with num %d\n", player_id, action, num);
+
+    if(match->player_status[player_id] == DEAD) {
+        print_log(LOG_DEBUG, "Player %d is dead, ignoring action\n", player_id);
+        return;
+    }
 
     pthread_mutex_lock(&match->mutex);
 
