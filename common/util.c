@@ -1,19 +1,33 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <stdlib.h>
-#include <poll.h>
 #include <arpa/inet.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <net/if.h>
 #include <stdarg.h>
 #include <sys/errno.h>
 #include "util.h"
 
 pthread_t *launch_thread(void *(*start_routine)(void *), void *arg) {
-    pthread_t *thread = malloc(sizeof(pthread_t)); // Consider storing somewhere
+    return launch_thread_with_mode(start_routine, arg, PTHREAD_CREATE_JOINABLE);
+}
 
-    int r = pthread_create(thread, NULL, start_routine, arg);
+/**
+ * Launches a new thread.
+ *
+ * @param start_routine The function to be executed by the thread.
+ * @param arg The argument to be passed to the start_routine function.
+ * @return A dynamically allocated pointer to the pthread_t identifier for the new thread.
+ ** Must be freed by the caller.
+ */
+pthread_t *launch_thread_with_mode(void *(*start_routine)(void *), void *arg, int mode) {
+    pthread_t *thread = malloc(sizeof(pthread_t));
+
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, mode);
+
+    int r = pthread_create(thread, &attr, start_routine, arg);
     if (r != 0) {
         perror("pthread_create");
         return NULL;

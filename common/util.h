@@ -35,6 +35,7 @@
     // POSIX
 #endif
 
+pthread_t *launch_thread_with_mode(void *(*start_routine)(void *), void *arg, int mode);
 pthread_t *launch_thread(void *(*start_routine)(void *), void *arg);
 
 int read_loop(int fd, void * dst, int n, int flags);

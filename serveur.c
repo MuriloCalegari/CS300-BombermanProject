@@ -1,5 +1,3 @@
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +5,6 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <assert.h>
-#include <poll.h>
 #include <time.h>
 #include "server/network.h"
 #include "server/match.h"
@@ -95,10 +92,10 @@ void start_match(Match* match) {
   context->match = match;
 
   match->match_handler_thread = launch_thread(match_handler, context);
-  match->match_updater_thread = launch_thread(match_updater_thread_handler, context);
+  match->match_updater_thread = launch_thread_with_mode(match_updater_thread_handler, context, PTHREAD_CREATE_DETACHED);
 }
 
-/* Used by the main thread to decide if it should setup a new match with no players */
+/* Used by the main thread to decide if it should set up a new match with no players */
 int should_setup_new_match(Match *match) {
   if(match == NULL || match->players_count == MAX_PLAYERS_PER_MATCH) {
     return 1;
