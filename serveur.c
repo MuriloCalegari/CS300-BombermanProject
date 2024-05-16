@@ -316,7 +316,7 @@ void *match_updater_thread_handler(void *arg) {
   Match *match = context->match;
   pthread_t *thread = match->match_updater_thread;
 
-  pthread_cleanup_push(clean_arg, arg);
+  pthread_cleanup_push(clean_arg, arg)
 
   int short_update_count_before_full_update = LONG_FREQ_MS / match->freq;
 
