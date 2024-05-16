@@ -93,6 +93,8 @@ void start_match(Match* match) {
 
   match->match_handler_thread = launch_thread(match_handler, context);
   match->match_updater_thread = launch_thread_with_mode(match_updater_thread_handler, context, PTHREAD_CREATE_DETACHED);
+
+  match->has_match_started = true;
 }
 
 /* Used by the main thread to decide if it should set up a new match with no players */
@@ -247,7 +249,7 @@ void *tcp_player_handler(void *arg) {
   Match *match = context->match;
   int player_index = context->player_index;
 
-  pthread_cleanup_push(clean_arg, arg);
+  pthread_cleanup_push(clean_arg, arg)
 
   printf("TCP_HANDLER: Thread initialized for player %d, waiting for client to be ready\n", player_index);
 
@@ -269,10 +271,6 @@ void *tcp_player_handler(void *arg) {
         pthread_mutex_unlock(&match->mutex);
         break;
       case T_CHAT_ALL_PLAYERS:
-        pthread_mutex_lock(&match->mutex); 
-        send_message(match, player_index, T_CHAT_ALL_PLAYERS);
-        pthread_mutex_unlock(&match->mutex); 
-        break;
       case T_CHAT_TEAM:
         pthread_mutex_lock(&match->mutex);
         send_message(match, player_index, T_CHAT_ALL_PLAYERS);

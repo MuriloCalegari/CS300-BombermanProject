@@ -7,6 +7,7 @@ socket information, current game status, etc.
 #include <stdint.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <stdbool.h>
 
 #define FOUR_OPPONENTS_MODE 0
 #define TEAM_MODE 1
@@ -78,7 +79,8 @@ typedef struct Match {
     Bomb *bombs_head;
     Bomb *bombs_tail;
 
-    uint8_t is_match_finished;
+    bool has_match_started;
+    bool is_match_finished;
 
     pthread_mutex_t mutex;
 
