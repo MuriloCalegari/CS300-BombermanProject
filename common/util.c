@@ -43,9 +43,12 @@ int read_loop(int fd, void * dst, int n, int flags) {
     while(received != n) {
         int just_sent = recv(fd, dst + received, n - received, flags);
 
-        if(just_sent < 0) {
+        if(just_sent <= 0) {
             if(errno == EINTR) {
                 continue;
+            }
+            if(just_sent == 0) {
+                return 0;
             }
             perror("recv");
             return -1;

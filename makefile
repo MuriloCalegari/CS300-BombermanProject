@@ -19,12 +19,16 @@ OBJS_COMMON = $(patsubst %.c,%.o,$(SRCS_COMMON))
 OBJS_SERVER = $(patsubst %.c,%.o,$(SRCS_SERVER))
 OBJS_CLIENT = $(patsubst %.c,%.o,$(SRCS_CLIENT))
 
+HEADERS_COMMON = $(patsubst %.c,%.h,$(SRCS_COMMON))
+HEADERS_SERVER = $(patsubst %.c,%.h,$(SRCS_SERVER))
+HEADERS_CLIENT = $(patsubst %.c,%.h,$(SRCS_CLIENT))
+
 all: client serveur
 
-client: $(OBJS_CLIENT) $(OBJS_COMMON)
+client: $(OBJS_CLIENT) $(OBJS_COMMON) $(HEADERS_CLIENT) $(HEADERS_COMMON) $(C)/context.h
 	$(CC) $(CFLAGS) -o run_client $(OBJS_CLIENT) $(OBJS_COMMON) client.c $(LIBS)
 
-serveur: $(OBJS_SERVER) $(OBJS_COMMON)
+serveur: $(OBJS_SERVER) $(OBJS_COMMON) $(HEADERS_SERVER) $(HEADERS_COMMON) $(S)/context.h
 	$(CC) $(CFLAGS) -o serveur $(OBJS_SERVER) $(OBJS_COMMON) serveur.c $(LIBS)
 
 %.o: %.c
