@@ -104,7 +104,7 @@ int accept_loop(int fd, struct sockaddr *addr, socklen_t *addrlen) {
     while(1) {
         int client_fd = accept(fd, addr, addrlen);
 
-        if(client_fd == -1) {
+        if(client_fd <= 0) {
             if(errno == EINTR) {
                 continue;
             }

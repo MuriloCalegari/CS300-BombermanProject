@@ -6,7 +6,8 @@
 #define MODE_NO_TEAM 1 
 #define MODE_2_TEAM 2
 
-#define UDP_TIMEOUT_SECONDS 2
+#define UDP_POLL_TIMEOUT_MILLISECONDS 2000
+#define UDP_NO_MESSAGE_FROM_SERVER_TIMEOUT_MILLISECONDS 5000
 
 // When to timeout the read of a message from the TCP socket
 // so we can check if

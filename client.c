@@ -48,7 +48,7 @@ int connect_to_server(int port, char* addr){
 
 void print_header(LOG_LEVEL level, MessageHeader* header){
     print_log(level, "MessageHeader: CODEREQ(%d) ID(%d) EQ(%d)\n",
-        GET_CODEREQ(header), GET_ID(header), GET_EQ(header));
+              GET_CODEREQ(header), GET_ID(header), GET_EQ(header));
 }
 
 int start_match(player *pl, int mode) {
@@ -85,7 +85,7 @@ int start_match(player *pl, int mode) {
     int test = GET_CODEREQ(&resp.header);
     print_log(LOG_DEBUG, "Received codereq %d from server\n", test);
     if(((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_4_OPPONENTS && mode == MODE_NO_TEAM) ||
-    ((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_2_TEAMS && mode == MODE_2_TEAM)) {
+       ((GET_CODEREQ(&resp.header)) != SERVER_RESPONSE_MATCH_START_2_TEAMS && mode == MODE_2_TEAM)) {
         print_log(LOG_ERROR, "start_match, error recv codereq");
         return -1;
     }
@@ -126,9 +126,9 @@ int start_match(player *pl, int mode) {
     }
 
     // If address equals localhost and this is a mac then...
-    
+
     int ifindex = -1;
-    
+
     if(strcmp(addr, "localhost") == 0 || strcmp(addr, "::1") == 0) {
         #ifdef TARGET_OS_OSX
         print_log(LOG_INFO, "Running on MacOS with localhost, using if_nametoindex for loopback interface\n");
@@ -171,7 +171,7 @@ int start_match(player *pl, int mode) {
 
     header.header_line = htons(header.header_line);
 
-    if(write_loop(pl->socket_tcp, &header, sizeof(header), 0) <= 0){
+    if(write_loop(pl->socket_tcp, &header, sizeof(header), 0) <= 0) {
         perror("start_match, send");
         return -1;
     }
@@ -239,7 +239,7 @@ int udp_message(player *pl, int action){
     struct sockaddr_in6 adr;
     memset(&adr, 0, sizeof(adr));
     adr.sin6_family = AF_INET6;
-    inet_pton(AF_INET6, pl->server_adr, &adr.sin6_addr); 
+    inet_pton(AF_INET6, pl->server_adr, &adr.sin6_addr);
     adr.sin6_port = htons(pl->port_udp);
 
     int send = sendto(pl->socket_udp, &buffer, sizeof(buffer), 0, (struct sockaddr *)&adr, sizeof(adr));
@@ -364,13 +364,17 @@ void process_tchat_message(player *pl, MessageHeader *header) {
 void *read_tcp(void* arg){
     player *pl = (player *) arg;
 
-    while(1){
+    while(pl->end == 0){
         // Read header first, then process message accordingly
 
         MessageHeader header;
         memset(&header, 0, sizeof(header));
 
-        if(read_loop(pl->socket_tcp, &header, sizeof(header), 0) <= 0){
+        int ret;
+
+        if((ret = read_loop(pl->socket_tcp, &header, sizeof(header), 0)) <= 0){
+            if(ret == 0) end_game(pl); // Server ended game
+
             perror("read_tcp, recv");
         }
 
@@ -413,19 +417,29 @@ void refresh_gameboard_implementation(player *pl) {
     print_log(LOG_DEBUG, "Mallocing buffer of size %d for UDP gameboard updates\n", buf_size);
     char *buf = malloc(buf_size);
     MessageHeader *header;
-    while(pl->end == 0){
 
+    int time_since_last_udp_message = 0;
+
+    while(pl->end == 0) {
         // Use poll() to poll socket_multidiff with a timeout of UDP_TIMEOUT
         struct pollfd fds[1];
         fds[0].fd = pl->socket_multidiff;
         fds[0].events = POLLIN;
-        int ret = poll_loop(fds, 1, UDP_TIMEOUT_SECONDS * 1000);
+        int ret = poll_loop(fds, 1, UDP_POLL_TIMEOUT_MILLISECONDS);
 
         if (ret == -1) {
             perror("poll");
             break;
         } else if (ret == 0) {
+            time_since_last_udp_message += UDP_POLL_TIMEOUT_MILLISECONDS;
+            if(pl->g->init == 1 && time_since_last_udp_message >= UDP_NO_MESSAGE_FROM_SERVER_TIMEOUT_MILLISECONDS) {
+                print_log(LOG_WARNING, "No message from server for %d milliseconds, exiting...\n", UDP_NO_MESSAGE_FROM_SERVER_TIMEOUT_MILLISECONDS);
+                end_game(pl);
+                break;
+            }
             continue;
+        } else {
+            time_since_last_udp_message = 0;
         }
 
         recvfrom(pl->socket_multidiff, buf, buf_size, 0, NULL, 0);
@@ -547,7 +561,7 @@ int main(int argc, char** args){
 
     pthread_join(*pl->read_tcp_thread, NULL);
     pthread_join(*pl->game_control_thread, NULL);
-    
+
     close(pl->socket_tcp);
     close(pl->socket_multidiff);
     close(pl->socket_udp);
