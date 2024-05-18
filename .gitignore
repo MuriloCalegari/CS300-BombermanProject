@@ -4,3 +4,4 @@ run_client
 serveur
 
 **/*.o
+/run_client_log.txt
