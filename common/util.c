@@ -78,6 +78,42 @@ int write_loop(int fd, void * src, int n, int flags) {
     return sent;
 }
 
+int poll_loop(struct pollfd *fds, nfds_t nfds, int timeout) {
+    int r;
+
+    while(1) {
+        r = poll(fds, nfds, timeout);
+
+        if(r == -1) {
+            if(errno == EINTR) {
+                continue;
+            }
+
+            perror("poll");
+            return -1;
+        }
+
+        return r;
+    }
+}
+
+int accept_loop(int fd, struct sockaddr *addr, socklen_t *addrlen) {
+    while(1) {
+        int client_fd = accept(fd, addr, addrlen);
+
+        if(client_fd == -1) {
+            if(errno == EINTR) {
+                continue;
+            }
+
+            perror("accept");
+            return -1;
+        }
+
+        return client_fd;
+    }
+}
+
 int write_loop_udp(int fd, void * src, int n, struct sockaddr_in6 * dest_addr, socklen_t dest_addr_len) {
     int sent = 0;
 

@@ -12,7 +12,7 @@ socket information, current game status, etc.
 #define FOUR_OPPONENTS_MODE 0
 #define TEAM_MODE 1
 
-#define MAX_PLAYERS_PER_MATCH 1
+#define MAX_PLAYERS_PER_MATCH 4
 
 #define LONG_FREQ_MS 1000
 #define MIN_SHORT_FREQ 100

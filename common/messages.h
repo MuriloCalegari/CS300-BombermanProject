@@ -7,7 +7,7 @@
 
 typedef struct MessageHeader {
     uint16_t header_line;
-} MessageHeader;
+} __attribute__((__packed__)) MessageHeader;
 
 #define SET_CODEREQ(header, codereq) \
     (header)->header_line = ((header)->header_line & 0xE000) | codereq
@@ -39,7 +39,7 @@ typedef struct MessageHeader {
 typedef struct ActionMessage {
     MessageHeader message_header;
     uint16_t action_identifier;
-} ActionMessage;
+} __attribute__((__packed__)) ActionMessage;
 
 #define NUM_MAX 8191
 
@@ -83,7 +83,7 @@ typedef struct ActionMessage {
 typedef struct TChatHeader {
     MessageHeader header;
     uint8_t data_len;
-} TChatHeader;
+} __attribute__((__packed__)) TChatHeader;
 
 
 /*
@@ -111,7 +111,7 @@ typedef struct NewMatchMessage {
     uint16_t port_udp;
     uint16_t port_mdiff;
     uint8_t adr_mdiff[16];
-} NewMatchMessage;
+} __attribute__((__packed__)) NewMatchMessage;
 
 /*
     Message sent to the client with the match status
@@ -143,7 +143,7 @@ typedef struct MatchFullUpdateHeader {
     uint16_t num;
     uint8_t height;
     uint8_t width;
-} MatchFullUpdateHeader;
+} __attribute__((__packed__)) MatchFullUpdateHeader;
     
 #define EMPTY_CELL 0
 #define INDESTRUCTIBLE_WALL 1
@@ -163,13 +163,13 @@ typedef struct CellStatusUpdate {
     uint8_t row;
     uint8_t col;
     uint8_t status;
-} CellStatusUpdate;
+} __attribute__((__packed__)) CellStatusUpdate;
 
 typedef struct MatchUpdateHeader {
     MessageHeader header;
     uint16_t num;
     uint8_t count;
-} MatchUpdateHeader;
+} __attribute__((__packed__)) MatchUpdateHeader;
 
 /* CODEREQ definitions */
 #define NEW_MATCH_4_OPPONENTS 1

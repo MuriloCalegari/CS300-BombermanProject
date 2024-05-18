@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -g -DVERBOSE
+CFLAGS = -Wall -Wextra -g -DVERBOSE -Wno-address-of-packed-member
 LIBS = -lncurses
 
 S = server

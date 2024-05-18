@@ -814,7 +814,7 @@ void finish_match(Match* match, int result) {
         SET_ID(&end_game_message, result);
     } else {
         printf("Match has two teams and result is %d\n", result);
-        SET_CODEREQ(&end_game_message, SERVER_RESPONSE_MATCH_START_2_TEAMS);
+        SET_CODEREQ(&end_game_message, SERVER_RESPONSE_MATCH_END_2_TEAMS);
         SET_EQ(&end_game_message, result);
     }
 

@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <ncurses.h>
 #include <net/if.h>
+#include <sys/poll.h>
 #include "ncurses/ncurses.h"
 #include "client/context.h"
 #include "client/network.h"
@@ -93,7 +94,6 @@ int start_match(player *pl, int mode) {
     pl->id = GET_ID(&resp.header);
     memset(&pl->adr_udp, 0, sizeof(pl->adr_udp));
     memcpy(&pl->adr_udp, resp.adr_mdiff, sizeof(pl->adr_udp));
-    //convertEndian(pl.adr_udp);
 
     pl->port_multidiff = ntohs(resp.port_mdiff);
     pl->port_udp = ntohs(resp.port_udp);
@@ -183,10 +183,13 @@ int tchat_message(player *pl){
     TChatHeader message;
     memset(&message, 0, sizeof(message));
     char *data = pl->g->lw->data;
-
-    if(strcmp(&data[0],"/") == 0 && strcmp(&data[1],"t") == 0 ) { // start message with "/t" for team tchat
+    // start message with "/t" for team tchat
+    if(data[0] == '/' && data[1] == 't') {
+        print_log(LOG_VERBOSE, "Sending team tchat message\n");
         SET_CODEREQ(&message.header, T_CHAT_TEAM);
-    }else{
+        data += 2;
+    } else {
+        print_log(LOG_VERBOSE, "Sending all players tchat message\n");
         SET_CODEREQ(&message.header, T_CHAT_ALL_PLAYERS);
     }
     SET_ID(&message.header, pl->id);
@@ -194,12 +197,12 @@ int tchat_message(player *pl){
     message.header.header_line = htons(message.header.header_line);
 
     message.data_len = strlen(data);
-    char res[message.data_len];
+    char res[message.data_len + 1];
     int i;
     for(i=0; i<message.data_len; i++){
-        res[i] = pl->g->lw->data[i];
+        res[i] = data[i];
     }
-    res[i+1] = 0;
+    res[i] = 0;
     print_log(LOG_DEBUG, "Sending tchat message: %s\n", res);
     if(write_loop(pl->socket_tcp, &message, sizeof(message), 0) <= 0){
         perror("tchat_message, send");
@@ -248,6 +251,18 @@ int udp_message(player *pl, int action){
     return 0;
 }
 
+void end_game(player *pl) {
+    print_log(LOG_INFO, "Ending game...\n");
+    pthread_mutex_lock(&pl->mutex);
+    if(pl->end == 0) {
+        curs_set(1); // Set the cursor to visible again
+        endwin(); /* End curses mode */
+        pl->end = 1;
+        print_log(LOG_DEBUG, "Setting end flag to 1\n");
+    }
+    pthread_mutex_unlock(&pl->mutex);
+}
+
 void *game_control(void *arg){
     player *pl = (player *)arg;
     while(pl->end == 0){
@@ -270,9 +285,7 @@ void *game_control(void *arg){
         if(pl->tchat_mode == 0){
             switch(a){
                 case QUIT: // quit
-                    curs_set(1); // Set the cursor to visible again
-                    endwin(); /* End curses mode */
-                    pl->end = 1;
+                    end_game(pl);
                     pthread_exit(NULL);
                 case LEFT: //left
                     udp_message(pl, MOVE_WEST);
@@ -297,58 +310,89 @@ void *game_control(void *arg){
 }
 
 
-void *read_tcp_tchat(void* arg){
+void process_tchat_message(player *pl, MessageHeader *header) {
+    TChatHeader *resp = malloc(sizeof(TChatHeader));
+    memcpy(resp, header, sizeof(TChatHeader));
+    read_loop(pl->socket_tcp, &resp->data_len, sizeof(resp->data_len), 0);
+
+    char data[resp->data_len + 1];
+
+    if(read_loop(pl->socket_tcp, &data, resp->data_len, 0) <= 0){
+        perror("read_tcp, recv");
+    }
+
+    data[resp->data_len] = '\0';
+
+    print_log(LOG_DEBUG, "Received tchat message of length %d: %s\n", resp->data_len, data);
+
+    pthread_mutex_lock(&pl->mutex);
+    //update tchat
+    switch(pl->g->lr->nb_line){
+        case 0:
+            memcpy(&pl->g->lr->data[0], data, resp->data_len);
+            pl->g->lr->len[0] = resp->data_len;
+            pl->g->lr->nb_line++;
+            break;
+        case 1:
+            memcpy(&pl->g->lr->data[1], data, resp->data_len);
+            pl->g->lr->len[1] = resp->data_len;
+            pl->g->lr->nb_line++;
+            break;
+        case 2:
+            memcpy(&pl->g->lr->data[2], data, resp->data_len);
+            pl->g->lr->len[2] = resp->data_len;
+            pl->g->lr->nb_line++;
+            break;
+        default:
+            memset(&pl->g->lr->data[0], 0, SIZE_MAX_MESSAGE); // clear source to get a new data
+            memmove(&pl->g->lr->data[0], pl->g->lr->data[1], pl->g->lr->len[1]);
+            pl->g->lr->len[0] = pl->g->lr->len[1];
+
+            memset(&pl->g->lr->data[1], 0, SIZE_MAX_MESSAGE);
+            memmove(&pl->g->lr->data[1], pl->g->lr->data[2], pl->g->lr->len[2]);
+            pl->g->lr->len[1] = pl->g->lr->len[2];
+
+            memset(&pl->g->lr->data[2], 0, SIZE_MAX_MESSAGE);
+            memcpy(&pl->g->lr->data[2], data, sizeof(data));
+            pl->g->lr->len[2] = resp->data_len;
+            break;
+    }
+    pthread_mutex_unlock(&pl->mutex);
+    free(resp);
+}
+
+void *read_tcp(void* arg){
     player *pl = (player *) arg;
 
     while(1){
-        TChatHeader resp;
-        memset(&resp, 0, sizeof(resp));
+        // Read header first, then process message accordingly
 
-        if(read_loop(pl->socket_tcp, &resp, sizeof(resp), 0) <= 0)
-            perror("read_tcp, recv");
+        MessageHeader header;
+        memset(&header, 0, sizeof(header));
 
-        pthread_mutex_lock(&pl->mutex);
-
-        char data[resp.data_len];
-
-        if(read_loop(pl->socket_tcp, &data, resp.data_len, 0) <= 0){
+        if(read_loop(pl->socket_tcp, &header, sizeof(header), 0) <= 0){
             perror("read_tcp, recv");
         }
 
-        print_log(LOG_DEBUG, "Received tchat message of length %d: %s\n", resp.data_len, data);
+        header.header_line = ntohs(header.header_line);
 
-        //update tchat
-        switch(pl->g->lr->nb_line){
-            case 0:
-                memcpy(&pl->g->lr->data[0], data, resp.data_len);
-                pl->g->lr->len[0] = resp.data_len;
-                pl->g->lr->nb_line++;
+        print_log(LOG_DEBUG, "Received header on TCP:\n");
+        print_header(LOG_DEBUG, &header);
+
+        switch((GET_CODEREQ(&header))) {
+            case SERVER_TCHAT_SENT_ALL_PLAYERS:
+            case SERVER_TCHAT_SENT_TEAM:
+                print_log(LOG_VERBOSE, "Header is a tchat message\n");
+                process_tchat_message(pl, &header);
                 break;
-            case 1:
-                memcpy(&pl->g->lr->data[1], data, resp.data_len);
-                pl->g->lr->len[1] = resp.data_len;
-                pl->g->lr->nb_line++;
-                break;
-            case 2:
-                memcpy(&pl->g->lr->data[2], data, resp.data_len);
-                pl->g->lr->len[2] = resp.data_len;
-                pl->g->lr->nb_line++;
+            case SERVER_RESPONSE_MATCH_END_4_OPPONENTS:
+            case SERVER_RESPONSE_MATCH_END_2_TEAMS:
+                print_log(LOG_VERBOSE, "Header is a match end message\n");
+                end_game(pl);
                 break;
             default:
-                memset(&pl->g->lr->data[0], 0, SIZE_MAX_MESSAGE); // clear source to get a new data
-                memmove(&pl->g->lr->data[0], pl->g->lr->data[1], pl->g->lr->len[1]);
-                pl->g->lr->len[0] = pl->g->lr->len[1];
-
-                memset(&pl->g->lr->data[1], 0, SIZE_MAX_MESSAGE);
-                memmove(&pl->g->lr->data[1], pl->g->lr->data[2], pl->g->lr->len[2]);
-                pl->g->lr->len[1] = pl->g->lr->len[2];
-
-                memset(&pl->g->lr->data[2], 0, SIZE_MAX_MESSAGE);
-                memcpy(&pl->g->lr->data[2], data, sizeof(data));
-                pl->g->lr->len[2] = resp.data_len;
-                break;
+                print_log(LOG_WARNING, "Received unknown message with codereq %d\n", GET_CODEREQ(&header));
         }
-        pthread_mutex_unlock(&pl->mutex);
     }
 
     pthread_exit(NULL);
@@ -364,13 +408,26 @@ void print_board(LOG_LEVEL level, board* b) {
     }
 }
 
-
 void refresh_gameboard_implementation(player *pl) {
     int buf_size = sizeof(MatchFullUpdateHeader) + SIZE_MAX_GRID*3;
     print_log(LOG_DEBUG, "Mallocing buffer of size %d for UDP gameboard updates\n", buf_size);
     char *buf = malloc(buf_size);
     MessageHeader *header;
-    while(pl->end == 0){    
+    while(pl->end == 0){
+
+        // Use poll() to poll socket_multidiff with a timeout of UDP_TIMEOUT
+        struct pollfd fds[1];
+        fds[0].fd = pl->socket_multidiff;
+        fds[0].events = POLLIN;
+        int ret = poll_loop(fds, 1, UDP_TIMEOUT_SECONDS * 1000);
+
+        if (ret == -1) {
+            perror("poll");
+            break;
+        } else if (ret == 0) {
+            continue;
+        }
+
         recvfrom(pl->socket_multidiff, buf, buf_size, 0, NULL, 0);
         header = (MessageHeader *) buf;
         header->header_line = ntohs(header->header_line);
@@ -423,13 +480,6 @@ void refresh_gameboard_implementation(player *pl) {
     free(buf);
 }
 
-void *refresh_gameboard(void *arg){ // multicast
-    player *pl = (player *) arg;
-    refresh_gameboard_implementation(pl);
-    pthread_exit(NULL);
-}
-
-
 int main(int argc, char** args){
     player *pl = malloc(sizeof(player));
     pl->num = 0; // number of action
@@ -477,16 +527,15 @@ int main(int argc, char** args){
         return 1;
     }
 
-    pthread_t thread_tchat_read;
-    pthread_t action;
-
     pl->g = create_board();
+    pl->read_tcp_thread = malloc(sizeof(pthread_t));
+    pl->game_control_thread = malloc(sizeof(pthread_t));
 
-    if(pthread_create(&thread_tchat_read, NULL, read_tcp_tchat, pl)){
+    if(pthread_create(pl->read_tcp_thread, NULL, read_tcp, pl)){
         perror("thread read tchat");
         return 1;
     }
-    if(pthread_create(&action, NULL, game_control, pl)){
+    if(pthread_create(pl->game_control_thread, NULL, game_control, pl)){
         perror("action thread");
         return 1;
     }
@@ -494,10 +543,10 @@ int main(int argc, char** args){
     refresh_gameboard_implementation(pl);
 
     printf("Game has ended. Waiting on other threads to finish...\n");
-    pthread_cancel(thread_tchat_read);
+    pthread_cancel(*pl->read_tcp_thread);
 
-    pthread_join(thread_tchat_read, NULL);
-    pthread_join(action, NULL);
+    pthread_join(*pl->read_tcp_thread, NULL);
+    pthread_join(*pl->game_control_thread, NULL);
     
     close(pl->socket_tcp);
     close(pl->socket_multidiff);

@@ -213,32 +213,33 @@ void send_message(Match *match, int player_index, int mode){
   TChatHeader msg;
   uint8_t len;
   read_loop(match->sockets_tcp[player_index], &len, sizeof(uint8_t), 0);
-  char data[len];
-  read_loop(match->sockets_tcp[player_index], &data, len+1, 0);
+  char data[len + 1];
+  read_loop(match->sockets_tcp[player_index], &data, len, 0);
+  data[len] = '\0';
   msg.data_len = len;
   // fprintf(stderr, "taille %d,message:%s\n",len,&data[1]);
   SET_ID(&msg.header, match->players[player_index]);
 
   if(mode == T_CHAT_ALL_PLAYERS){
-    for(int i=0; i<match->players_count; i++){
-      if(i!=player_index){
+    for(int i = 0; i < match->players_count; i++){
+      if(i != player_index){
         SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_ALL_PLAYERS);
         msg.header.header_line = htons(msg.header.header_line);
 
         write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
-        write_loop(match->sockets_tcp[i], &data[1], len, 0);
-        fprintf(stderr, "taille %d,message:%s\n",len,&data[1]);
+        write_loop(match->sockets_tcp[i], data, len, 0);
+        fprintf(stderr, "taille %d,message:%s\n",len, data);
       }
     }
-  }else {
-    for(int i=0; (i<match->players_count) && (match->players_team[i]==match->players_team[player_index]); i++){
-      if(i!=player_index){
+  } else {
+    for(int i = 0; i < match->players_count; i++){
+      if(i != player_index && match->players_team[i] == match->players_team[player_index]) {
         SET_CODEREQ(&msg.header, SERVER_TCHAT_SENT_TEAM);
         SET_EQ(&msg.header, match->players_team[player_index]);
         msg.header.header_line = htons(msg.header.header_line);
 
         write_loop(match->sockets_tcp[i], &msg, sizeof(TChatHeader), 0);
-        write_loop(match->sockets_tcp[i], &data[1], len, 0);
+        write_loop(match->sockets_tcp[i], data, len, 0);
       }
     }
   }
@@ -255,13 +256,17 @@ void *tcp_player_handler(void *arg) {
 
   while(1) {
     MessageHeader message_header;
+
+    // poll() tcp socket with a timeout
+
     read_loop(match->sockets_tcp[player_index], &message_header, sizeof(MessageHeader), 0);
     message_header.header_line = ntohs(message_header.header_line);
 
-    switch(GET_CODEREQ(&(message_header))) {
+      uint16_t codereq = GET_CODEREQ(&(message_header));
+      switch(codereq) {
       case CLIENT_READY_TO_PLAY_4_OPPONENTS:
       case CLIENT_READY_TO_PLAY_2_TEAMS:
-        printf("Player %d is ready to play\n", GET_ID(&message_header));
+        print_log(LOG_DEBUG, "Player %d is ready to play\n", GET_ID(&message_header));
         handle_client_ready_to_play(message_header, match);
 
         pthread_mutex_lock(&match->mutex);
@@ -272,8 +277,9 @@ void *tcp_player_handler(void *arg) {
         break;
       case T_CHAT_ALL_PLAYERS:
       case T_CHAT_TEAM:
+        print_log(LOG_DEBUG, "Player %d wants to send a message\n", GET_ID(&message_header));
         pthread_mutex_lock(&match->mutex);
-        send_message(match, player_index, T_CHAT_ALL_PLAYERS);
+        send_message(match, player_index, codereq);
         pthread_mutex_unlock(&match->mutex);
         break;
     }

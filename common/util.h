@@ -1,3 +1,5 @@
+#include <poll.h>
+
 #ifdef DEBUG
     #define DEBUG_PRINTF(...) printf("DEBUG: " __VA_ARGS__)
 #else
@@ -42,6 +44,9 @@ int read_loop(int fd, void * dst, int n, int flags);
 int write_loop(int fd, void * src, int n, int flags);
 int write_loop_udp(int fd, void * src, int n, struct sockaddr_in6 * dest_addr, socklen_t dest_addr_len);
 int determine_if_index();
+
+int poll_loop(struct pollfd *, nfds_t, int);
+int accept_loop(int, struct sockaddr *, socklen_t *);
 
 typedef enum LOG_LEVEL {
     LOG_VERBOSE,

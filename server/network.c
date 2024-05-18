@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include "../common/util.h"
 
 void affiche_connexion(struct sockaddr_in6 adrclient){
   char adr_buf[INET6_ADDRSTRLEN];
@@ -17,7 +18,7 @@ int wait_for_next_player(int socket) {
     struct sockaddr_in6 client_address;
     memset(&client_address, 0, sizeof(client_address));
     socklen_t size=sizeof(client_address);
-    int client_socket = accept(socket, (struct sockaddr *) &client_address, &size);
+    int client_socket = accept_loop(socket, (struct sockaddr *) &client_address, &size);
     if(client_socket == -1){
       perror("probleme socket client");
       exit(1);
