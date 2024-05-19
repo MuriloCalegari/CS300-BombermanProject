@@ -154,29 +154,36 @@ ACTION control(line_w* l, int mode) {
         prev_c = c;
     }
     ACTION a = NONE;
-    switch (prev_c) {
-        case ERR: break;
-        case KEY_LEFT:
-            a = LEFT; break;
-        case KEY_RIGHT:
-            a = RIGHT; break;
-        case KEY_UP:
-            a = UP; break;
-        case KEY_DOWN:
-            a = DOWN; break;
-        case 27: // ESC
-            a = QUIT; break;
-        case KEY_BACKSPACE:
-            if (l->cursor > 0) l->cursor--;
-            break;
-        case '\n': 
-            a = ENTER; break;
-        case ' ': // SPACE
-            a = BOMB_ACTION; break;
-        default:
-            if (prev_c >= ' ' && prev_c <= '~' && l->cursor < SIZE_MAX_MESSAGE && mode == 1)
-                l->data[(l->cursor)++] = prev_c;
-            break;
+
+    if(mode == 1){
+        if (prev_c >= ' ' && prev_c <= '~' && l->cursor < SIZE_MAX_MESSAGE && mode == 1){
+            l->data[(l->cursor)++] = prev_c;
+        }else if(prev_c == '\n'){
+            a = ENTER;
+        }
+    }else{
+        switch (prev_c) {
+            case ERR: break;
+            case KEY_LEFT:
+                a = LEFT; break;
+            case KEY_RIGHT:
+                a = RIGHT; break;
+            case KEY_UP:
+                a = UP; break;
+            case KEY_DOWN:
+                a = DOWN; break;
+            case 27: // ESC
+                a = QUIT; break;
+            case KEY_BACKSPACE:
+                if (l->cursor > 0) l->cursor--;
+                break;
+            case '\n': 
+                a = ENTER; break;
+            case ' ': // SPACE
+                a = BOMB_ACTION; break;
+            default:
+                break;
+        }
     }
     return a;
 }
@@ -200,50 +207,3 @@ int perform_action(ACTION a) {
     }
     return res;
 }
-
-
-// void test(gameboard *g){
-//     int up[DIM*DIM];
-//     for(int i=0; i<DIM; i++){
-//         up[i] = 1;
-//     }
-
-//     for(int j=DIM; j<DIM; j++){
-//         srand(time(NULL));
-//         up[j] = rand()%3;
-//     }
-
-//     for(int i=0; i<DIM; i++){
-//         up[i*DIM] = 2;
-//     }
-
-//     //g->b->grid = up;
-//     for(int i=0; i<DIM*DIM; i++){
-//         g->b->grid[i] = up[i];
-//     }
-// }
-
-/*
-int main(){
-    gameboard *g = create_board();
-    strcpy(g->lr->data[0], "bonjour");
-    g->lr->len[0] = strlen("bonjour");
-    strcpy(g->lr->data[1], "world");
-    g->lr->len[1] = strlen("world");
-    strcpy(g->lr->data[2], "francois");
-    g->lr->len[2] = strlen("francois");
-    while(1){
-        ACTION a = control(g->lw);
-        if(perform_action(g->b, g->p, a) == -1) break;
-        test(g);
-        refresh_game(g->b, g->lw, g->lr);
-        usleep(70*1000);
-    }
-    curs_set(1); // Set the cursor to visible again
-    endwin();
-    printf("%s\n", g->lr->data[1]);
-    printf("test\n");
-    printf("%d\n", g->b->h);
-    return 0;
-}
-*/

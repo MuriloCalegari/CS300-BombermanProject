@@ -422,10 +422,10 @@ void refresh_gameboard_implementation(player *pl) {
 
     while(pl->end == 0) {
         // Use poll() to poll socket_multidiff with a timeout of UDP_TIMEOUT
-        struct pollfd fds[1];
-        fds[0].fd = pl->socket_multidiff;
-        fds[0].events = POLLIN;
-        int ret = poll_loop(fds, 1, UDP_POLL_TIMEOUT_MILLISECONDS);
+        struct pollfd fds;
+        fds.fd = pl->socket_multidiff;
+        fds.events = POLLIN;
+        int ret = poll_loop(&fds, 1, UDP_POLL_TIMEOUT_MILLISECONDS);
 
         if (ret == -1) {
             perror("poll");
