@@ -34,7 +34,7 @@ client: $(OBJS_CLIENT) $(OBJS_COMMON) $(HEADERS_CLIENT) $(HEADERS_COMMON)
 serveur: $(OBJS_SERVER) $(OBJS_COMMON) $(HEADERS_SERVER) $(HEADERS_COMMON)
 	$(CC) $(CFLAGS) -o serveur $(OBJS_SERVER) $(OBJS_COMMON) serveur.c $(LIBS)
 
-%.o: %.c
+%.o: %.c $(HEADERS_CLIENT) $(HEADERS_COMMON) $(HEADERS_SERVER)
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 .PHONY: clean

@@ -510,6 +510,14 @@ void send_full_grid_to_all_players(Match *match) {
     }
 }
 
+void kill_player(Match *match, int player_index) {
+    print_log(LOG_VERBOSE, "Killing player %d\n", player_index);
+    int player_position = match->players_current_position[player_index];
+    match->grid[player_position] = EMPTY_CELL;
+    match->player_status[player_index] = DEAD;
+    match->players_current_position[player_index] = -1;
+}
+
 void kill_player_at_case(Match *match, int i, int j) {
     int cell = i * match->width + j;
 
@@ -517,17 +525,13 @@ void kill_player_at_case(Match *match, int i, int j) {
 
     if(match->grid[cell] >= PLAYER_OFFSET) {
         int player = DECODE_PLAYER(match->grid[cell]);
-        match->player_status[player] = DEAD;
-        match->players_current_position[player] = -1;
-        match->grid[cell] = EMPTY_CELL;
+        kill_player(match, player);
         killed = 1;
     } else if (match->grid[cell] == BOMB) {
         // then we need to find the player in the same cell
         for(int k = 0; k < match->players_count; k++) {
             if(match->players_current_position[k] == cell) {
-                match->player_status[k] = DEAD;
-                match->players_current_position[k] = -1;
-                match->grid[cell] = EMPTY_CELL;
+                kill_player(match, k);
                 killed = 1;
             }
         }
@@ -774,14 +778,11 @@ int should_finish_match(Match* match) {
     switch(match->mode) {
         case FOUR_OPPONENTS_MODE:
             return should_finish_match_four_opponents(match);
-            break;
         case TEAM_MODE:
             return should_finish_match_two_teams(match);
-            break;
         default:
             printf("Invalid mode found in should_finish_match");
             exit(-1);
-            break;
     }
 };
 

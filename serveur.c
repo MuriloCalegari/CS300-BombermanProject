@@ -258,8 +258,18 @@ void *tcp_player_handler(void *arg) {
     MessageHeader message_header;
 
     // poll() tcp socket with a timeout
+    int ret;
+    if((ret = read_loop(match->sockets_tcp[player_index], &message_header, sizeof(MessageHeader), 0)) <= 0) {
+        if(ret == 0) {
+            print_log(LOG_INFO, "Player %d closed its connection with us. We're killing him...\n", player_index);
+            kill_player(match, player_index);
+        } else {
+            print_log(LOG_ERROR, "Error reading from player %d. Killing him...\n", player_index);
+            kill_player(match, player_index);
+        }
 
-    read_loop(match->sockets_tcp[player_index], &message_header, sizeof(MessageHeader), 0);
+        break;
+    }
     message_header.header_line = ntohs(message_header.header_line);
 
       uint16_t codereq = GET_CODEREQ(&(message_header));

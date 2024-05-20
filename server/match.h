@@ -16,6 +16,7 @@ void process_partial_updates(Match *match);
 void send_full_grid_to_all_players(Match *match);
 
 void explode_bombs(Match* match);
+void kill_player(Match *match, int player_index);
 
 int should_finish_match(Match* match);
 
