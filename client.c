@@ -255,8 +255,6 @@ void end_game(player *pl) {
     print_log(LOG_INFO, "Ending game...\n");
     pthread_mutex_lock(&pl->mutex);
     if(pl->end == 0) {
-        curs_set(1); // Set the cursor to visible again
-        endwin(); /* End curses mode */
         pl->end = 1;
         print_log(LOG_DEBUG, "Setting end flag to 1\n");
     }
@@ -465,7 +463,8 @@ void refresh_gameboard_implementation(player *pl) {
             print_board(LOG_VERBOSE, pl->g->b);
 
             pthread_mutex_lock(&pl->mutex);
-            refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
+            if(pl->end == 0)
+                refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
             pthread_mutex_unlock(&pl->mutex);
         } else if((GET_CODEREQ(header)) == SERVER_PARTIAL_MATCH_UPDATE){
 
@@ -486,10 +485,14 @@ void refresh_gameboard_implementation(player *pl) {
             }
 
             pthread_mutex_lock(&pl->mutex);
-            refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
+            if(pl->end == 0)
+                refresh_game(pl->g->b, pl->g->lw, pl->g->lr);
             pthread_mutex_unlock(&pl->mutex);
         }
     }
+
+    curs_set(1); // Set the cursor to visible again
+    endwin(); /* End curses mode */
 
     free(buf);
 }
